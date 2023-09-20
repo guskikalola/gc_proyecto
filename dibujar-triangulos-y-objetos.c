@@ -283,14 +283,15 @@ void dibujar_triangulo(triobj *optr, int i)
     // 2. Iterar de pmin_x a pmax_x. Es decir, recorrer el rectangulo
     for (i = pmin.x; i <= pmax.x; i++) // De la x menor a la x mayor
     {
+        // Calcular la t
+        // La t al final es la proporción de cuanto hemos avanzado de la x menor a la mayor
+        if (pmax.x - pmin.x == 0)
+            t = (i - pmin.x);
+        else
+            t = (i - pmin.x) / (pmax.x - pmin.x);
+            
         for (j = pmin.y; j <= pmax.y; j++) // De la y menor a la y mayor
         {
-            // Calcular la t
-            // La t al final es la proporción de cuanto hemos avanzado de la x menor a la mayor
-            if (pmax.x - pmin.x == 0)
-                t = (i - pmin.x);
-            else
-                t = (i - pmin.x) / (pmax.x - pmin.x);
 
             // Calcular la s
             // La s al final es la proporción de cuanto hemos avanzado de la y menor a la mayor
@@ -304,28 +305,27 @@ void dibujar_triangulo(triobj *optr, int i)
             beta = (1 - s) * t;
             gamma = s;
 
-            // Si es un punto interior ( la suma de las cordenadas es 1 ), dibujamos el punto
-            if (alfa + beta + gamma == 1) 
-            {
+            // Si hacemos la comparación van a salir artefactos por culpa de la precisión. 1.0000 != 1.0f
+            // if (alfa + beta + gamma == 1.0f)
+            // {
 
-                // Usando las mismas cordenadas baricentricas podemos calcular todos los valores en este punto
-                pcalculado.x = alfa * tptr->p1.x + beta * tptr->p2.x + gamma * tptr->p3.x;
-                pcalculado.y = alfa * tptr->p1.y + beta * tptr->p2.y + gamma * tptr->p3.y;
-                pcalculado.z = alfa * tptr->p1.z + beta * tptr->p2.z + gamma * tptr->p3.z;
-                pcalculado.u = alfa * tptr->p1.u + beta * tptr->p2.u + gamma * tptr->p3.u;
-                pcalculado.v = alfa * tptr->p1.v + beta * tptr->p2.v + gamma * tptr->p3.v;
+            // Usando las mismas cordenadas baricentricas podemos calcular todos los valores en este punto
+            pcalculado.x = alfa * tptr->p1.x + beta * tptr->p2.x + gamma * tptr->p3.x;
+            pcalculado.y = alfa * tptr->p1.y + beta * tptr->p2.y + gamma * tptr->p3.y;
+            pcalculado.z = alfa * tptr->p1.z + beta * tptr->p2.z + gamma * tptr->p3.z;
+            pcalculado.u = alfa * tptr->p1.u + beta * tptr->p2.u + gamma * tptr->p3.u;
+            pcalculado.v = alfa * tptr->p1.v + beta * tptr->p2.v + gamma * tptr->p3.v;
 
-                // Finalmente dibujamos el punto
-                glBegin(GL_POINTS);
-                colorv = color_textura(pcalculado.u, pcalculado.v);
-                r = colorv[0];
-                g = colorv[1];
-                b = colorv[2];
-                glColor3ub(r, g, b);
-                glVertex3f(pcalculado.x, pcalculado.y, pcalculado.z);
-                glEnd();
-            }
-
+            // Finalmente dibujamos el punto
+            glBegin(GL_POINTS);
+            colorv = color_textura(pcalculado.u, pcalculado.v);
+            r = colorv[0];
+            g = colorv[1];
+            b = colorv[2];
+            glColor3ub(r, g, b);
+            glVertex3f(pcalculado.x, pcalculado.y, pcalculado.z);
+            glEnd();
+            // }
         }
     }
 
