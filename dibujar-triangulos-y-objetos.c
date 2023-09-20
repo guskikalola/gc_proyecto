@@ -179,6 +179,61 @@ void obtener_punto_corte(punto *pcorteptr, punto *psupptr, punto *pinfptr, int a
     pcorteptr->v = diffV + psupptr->v;
 }
 
+int max(int *listptr, int length)
+{
+    int i;
+    int max = listptr[0];
+
+    for (i = 0; i < length; i++)
+    {
+        if (listptr[i] > max)
+            max = *(listptr + i);
+    }
+
+    return max;
+}
+
+int min(int *listptr, int length)
+{
+    int i;
+    int min = listptr[0];
+
+    for (i = 0; i < length; i++)
+    {
+        if (listptr[i] < min)
+            min = *(listptr + i);
+    }
+
+    return min;
+}
+
+void calcular_maximo_minimo(hiruki *tptr, punto *pmin, punto *pmax)
+{
+    int listax[3];
+    int listay[3];
+    int listaz[3];
+
+    listax[0] = tptr->p1.x;
+    listax[1] = tptr->p2.x;
+    listax[2] = tptr->p3.x;
+
+    listay[0] = tptr->p1.y;
+    listay[1] = tptr->p2.y;
+    listay[2] = tptr->p3.y;
+
+    listaz[0] = tptr->p1.z;
+    listaz[1] = tptr->p2.z;
+    listaz[2] = tptr->p3.z;
+
+    pmin->x = min(listax, 3);
+    pmin->y = min(listay, 3);
+    pmin->z = min(listaz, 3);
+
+    pmax->x = max(listax, 3);
+    pmax->y = max(listay, 3);
+    pmax->z = max(listaz, 3);
+}
+
 void dibujar_triangulo(triobj *optr, int i)
 {
     hiruki *tptr;
@@ -187,10 +242,19 @@ void dibujar_triangulo(triobj *optr, int i)
     float x1, h1, z1, u1, v1, x2, h2, z2, u2, v2, x3, h3, z3, u3, v3;
     float c1x, c1z, c1u, c1v, c2x, c2z, c2u, c2v;
     int linea;
+    int j;
+    float t, s;
     float cambio1, cambio1z, cambio1u, cambio1v, cambio2, cambio2z, cambio2u, cambio2v;
     punto p1, p2, p3;
 
-    punto pcorte1, pcorte2;
+    // punto pcorte1, pcorte2;
+    punto pmin, pmax;
+
+    punto pcalculado;
+    float alfa, beta, gamma;
+
+    unsigned char r, g, b;
+    unsigned char *colorv;
 
     if (i >= optr->num_triangles)
         return;
@@ -211,6 +275,61 @@ void dibujar_triangulo(triobj *optr, int i)
     // TODO
     // hemen azpikoa kendu eta triangelua testurarekin marrazten duen kodea sartu.
     // lo que sigue aqui hay que sustituir por el código adecuado que dibuja el triangulo con textura
+
+    // 1. Calcular "Bounding Box", para ello calcular punto minimo y punto maximo
+
+    calcular_maximo_minimo(tptr, &pmin, &pmax);
+
+    // 2. Iterar de pmin_x a pmax_x. Es decir, recorrer el rectangulo
+    for (i = pmin.x; i <= pmax.x; i++) // De la x menor a la x mayor
+    {
+        for (j = pmin.y; j <= pmax.y; j++) // De la y menor a la y mayor
+        {
+            // Calcular la t
+            // La t al final es la proporción de cuanto hemos avanzado de la x menor a la mayor
+            if (pmax.x - pmin.x == 0)
+                t = (i - pmin.x);
+            else
+                t = (i - pmin.x) / (pmax.x - pmin.x);
+
+            // Calcular la s
+            // La s al final es la proporción de cuanto hemos avanzado de la y menor a la mayor
+            if (pmax.y - pmin.y == 0)
+                s = (j - pmin.y);
+            else
+                s = (j - pmin.y) / (pmax.y - pmin.y);
+
+            // Calculamos las cordenadas baricentricas
+            alfa = (1 - t) * (1 - s);
+            beta = (1 - s) * t;
+            gamma = s;
+
+            // Si es un punto interior ( la suma de las cordenadas es 1 ), dibujamos el punto
+            if (alfa + beta + gamma == 1) 
+            {
+
+                // Usando las mismas cordenadas baricentricas podemos calcular todos los valores en este punto
+                pcalculado.x = alfa * tptr->p1.x + beta * tptr->p2.x + gamma * tptr->p3.x;
+                pcalculado.y = alfa * tptr->p1.y + beta * tptr->p2.y + gamma * tptr->p3.y;
+                pcalculado.z = alfa * tptr->p1.z + beta * tptr->p2.z + gamma * tptr->p3.z;
+                pcalculado.u = alfa * tptr->p1.u + beta * tptr->p2.u + gamma * tptr->p3.u;
+                pcalculado.v = alfa * tptr->p1.v + beta * tptr->p2.v + gamma * tptr->p3.v;
+
+                // Finalmente dibujamos el punto
+                glBegin(GL_POINTS);
+                colorv = color_textura(pcalculado.u, pcalculado.v);
+                r = colorv[0];
+                g = colorv[1];
+                b = colorv[2];
+                glColor3ub(r, g, b);
+                glVertex3f(pcalculado.x, pcalculado.y, pcalculado.z);
+                glEnd();
+            }
+
+        }
+    }
+
+    /*
 
     // Calcular Psup, Pmed, Pinf
 
@@ -272,6 +391,7 @@ void dibujar_triangulo(triobj *optr, int i)
         z1 = pcorte1.z;
         z2 = pcorte2.z;
 
+
         u1 = pcorte1.u;
         u2 = pcorte2.u;
 
@@ -299,7 +419,7 @@ void dibujar_triangulo(triobj *optr, int i)
             obtener_punto_corte(&pcorte1, pgoiptr, pbeheptr, i);
             obtener_punto_corte(&pcorte2, perdiptr, pbeheptr, i);
         }
-        
+
         x1 = pcorte1.x;
         x2 = pcorte2.x;
 
@@ -314,6 +434,8 @@ void dibujar_triangulo(triobj *optr, int i)
 
         dibujar_linea_z(i, x1, z1, u1, v1, x2, z2, u2, v2);
     }
+
+    */
 }
 
 static void marraztu(void)
