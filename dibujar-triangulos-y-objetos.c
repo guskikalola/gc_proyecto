@@ -63,9 +63,15 @@ unsigned char *color_textura(float u, float v)
     int desplazamendua;
     char *lag;
 
+    int xp, yp;
+
+    xp = u * dimx;
+    yp = (1-v) * dimy; 
+
     desplazamendua = 1;
     lag = (unsigned char *)bufferra; // pixel on the left and top
-    return (lag + 3 * desplazamendua);
+    return (lag + dimx * yp * 3 + xp * 3); // Hay que multiplicar por 3 porque cada punto tiene (r,g,b)
+    // return (lag + 3 * desplazamendua);
 }
 
 // TODO
@@ -242,16 +248,19 @@ void dibujar_triangulo(triobj *optr, int i)
     float x1, h1, z1, u1, v1, x2, h2, z2, u2, v2, x3, h3, z3, u3, v3;
     float c1x, c1z, c1u, c1v, c2x, c2z, c2u, c2v;
     int linea;
-    int j;
-    float t, s;
     float cambio1, cambio1z, cambio1u, cambio1v, cambio2, cambio2z, cambio2u, cambio2v;
     punto p1, p2, p3;
+
+    float t, s, j;
+    float cambiot, cambios, cambioj;
 
     // punto pcorte1, pcorte2;
     punto pmin, pmax;
 
-    punto pcalculado;
+    punto pcalculado, pcorte1, pcorte2;
     float alfa, beta, gamma;
+
+    punto *pcortemayor, *pcortemenor;
 
     unsigned char r, g, b;
     unsigned char *colorv;
@@ -275,61 +284,6 @@ void dibujar_triangulo(triobj *optr, int i)
     // TODO
     // hemen azpikoa kendu eta triangelua testurarekin marrazten duen kodea sartu.
     // lo que sigue aqui hay que sustituir por el código adecuado que dibuja el triangulo con textura
-
-    // 1. Calcular "Bounding Box", para ello calcular punto minimo y punto maximo
-
-    calcular_maximo_minimo(tptr, &pmin, &pmax);
-
-    // 2. Iterar de pmin_x a pmax_x. Es decir, recorrer el rectangulo
-    for (i = pmin.x; i <= pmax.x; i++) // De la x menor a la x mayor
-    {
-        // Calcular la t
-        // La t al final es la proporción de cuanto hemos avanzado de la x menor a la mayor
-        if (pmax.x - pmin.x == 0)
-            t = (i - pmin.x);
-        else
-            t = (i - pmin.x) / (pmax.x - pmin.x);
-            
-        for (j = pmin.y; j <= pmax.y; j++) // De la y menor a la y mayor
-        {
-
-            // Calcular la s
-            // La s al final es la proporción de cuanto hemos avanzado de la y menor a la mayor
-            if (pmax.y - pmin.y == 0)
-                s = (j - pmin.y);
-            else
-                s = (j - pmin.y) / (pmax.y - pmin.y);
-
-            // Calculamos las cordenadas baricentricas
-            alfa = (1 - t) * (1 - s);
-            beta = (1 - s) * t;
-            gamma = s;
-
-            // Si hacemos la comparación van a salir artefactos por culpa de la precisión. 1.0000 != 1.0f
-            // if (alfa + beta + gamma == 1.0f)
-            // {
-
-            // Usando las mismas cordenadas baricentricas podemos calcular todos los valores en este punto
-            pcalculado.x = alfa * tptr->p1.x + beta * tptr->p2.x + gamma * tptr->p3.x;
-            pcalculado.y = alfa * tptr->p1.y + beta * tptr->p2.y + gamma * tptr->p3.y;
-            pcalculado.z = alfa * tptr->p1.z + beta * tptr->p2.z + gamma * tptr->p3.z;
-            pcalculado.u = alfa * tptr->p1.u + beta * tptr->p2.u + gamma * tptr->p3.u;
-            pcalculado.v = alfa * tptr->p1.v + beta * tptr->p2.v + gamma * tptr->p3.v;
-
-            // Finalmente dibujamos el punto
-            glBegin(GL_POINTS);
-            colorv = color_textura(pcalculado.u, pcalculado.v);
-            r = colorv[0];
-            g = colorv[1];
-            b = colorv[2];
-            glColor3ub(r, g, b);
-            glVertex3f(pcalculado.x, pcalculado.y, pcalculado.z);
-            glEnd();
-            // }
-        }
-    }
-
-    /*
 
     // Calcular Psup, Pmed, Pinf
 
@@ -357,85 +311,116 @@ void dibujar_triangulo(triobj *optr, int i)
     else
         perdiptr = &tptr->p3; // Pmed <- P3
 
-    x1 = 100;
-    x2 = 200;
-    z1 = 0;
-    z2 = 0;
-    u1 = 0.5;
-    u2 = 0.5;
-    v1 = 0.5;
-    v2 = 0.5;
+    if (pgoiptr->y - perdiptr->y == 0)
+        cambiot = 1;
+    else
+        cambiot = 1 / (pgoiptr->y - perdiptr->y);
 
-    for (i = pgoiptr->y; i > perdiptr->y; i--)
+    if (pgoiptr->y - pbeheptr->y == 0)
+        cambios = 1;
+    else
+        cambios = 1 / (pgoiptr->y - pbeheptr->y);
+
+    // De A -> B (t)  y  A -> C (s)
+    for (t = 1, s = 1; t > 0; t = t - cambiot, s = s - cambios)
     {
+        pcorte1.x = t * pgoiptr->x + (1 - t) * perdiptr->x;
+        pcorte1.y = t * pgoiptr->y + (1 - t) * perdiptr->y;
+        pcorte1.z = t * pgoiptr->z + (1 - t) * perdiptr->z;
+        pcorte1.u = t * pgoiptr->u + (1 - t) * perdiptr->u;
+        pcorte1.v = t * pgoiptr->v + (1 - t) * perdiptr->v;
 
-        // La funcion de dibujar linea lo hace de izquiera a derecha
-        // Por ello tenemos que asignarle al (x1,y1,z1) el punto
-        // de corte de menor x y al (x2,y2,z2) el punto de corte
-        // de mayor x
+        pcorte2.x = s * pgoiptr->x + (1 - s) * pbeheptr->x;
+        pcorte2.y = s * pgoiptr->y + (1 - s) * pbeheptr->y;
+        pcorte2.z = s * pgoiptr->z + (1 - s) * pbeheptr->z;
+        pcorte2.u = s * pgoiptr->u + (1 - s) * pbeheptr->u;
+        pcorte2.v = s * pgoiptr->v + (1 - s) * pbeheptr->v;
 
-        if (pgoiptr->x > perdiptr->x)
+        if (pcorte1.x > pcorte2.x)
         {
-            obtener_punto_corte(&pcorte1, pgoiptr, perdiptr, i);
-            obtener_punto_corte(&pcorte2, pgoiptr, pbeheptr, i);
+            pcortemayor = &pcorte1;
+            pcortemenor = &pcorte2;
         }
         else
         {
-            obtener_punto_corte(&pcorte1, pgoiptr, pbeheptr, i);
-            obtener_punto_corte(&pcorte2, pgoiptr, perdiptr, i);
+            pcortemayor = &pcorte2;
+            pcortemenor = &pcorte1;
         }
 
-        x1 = pcorte1.x;
-        x2 = pcorte2.x;
+        cambioj = 1 / (pcortemayor->x - pcortemenor->x);
 
-        z1 = pcorte1.z;
-        z2 = pcorte2.z;
+        for (j = 1; j > 0; j -= cambioj)
+        {
+            pcalculado.x = j * pcortemayor->x + (1 - j) * pcortemenor->x;
+            pcalculado.y = j * pcortemayor->y + (1 - j) * pcortemenor->y;
+            pcalculado.z = j * pcortemayor->z + (1 - j) * pcortemenor->z;
+            pcalculado.u = j * pcortemayor->u + (1 - j) * pcortemenor->u;
+            pcalculado.v = j * pcortemayor->v + (1 - j) * pcortemenor->v;
 
-
-        u1 = pcorte1.u;
-        u2 = pcorte2.u;
-
-        v1 = pcorte1.v;
-        v2 = pcorte2.v;
-
-        dibujar_linea_z(i, x1, z1, u1, v1, x2, z2, u2, v2);
+            glBegin(GL_POINTS);
+            colorv = color_textura(pcalculado.u, pcalculado.v);
+            r = colorv[0];
+            g = colorv[1];
+            b = colorv[2];
+            glColor3ub(r, g, b);
+            glVertex3f(pcalculado.x, pcalculado.y, pcalculado.z);
+            glEnd();
+        }
     }
 
-    for (i = perdiptr->y; i > pbeheptr->y; i--)
+    // Dibujar parte inferior
+    // Seguimos de la s anterior
+    // De B -> C (t)  y  A -> C (s)
+
+    if (perdiptr->y - pbeheptr->y == 0)
+        cambiot = 1;
+    else
+        cambiot = 1 / (perdiptr->y - pbeheptr->y);
+    for (t = 1; t > 0; t = t - cambiot, s = s - cambios)
     {
+        pcorte1.x = t * perdiptr->x + (1 - t) * pbeheptr->x;
+        pcorte1.y = t * perdiptr->y + (1 - t) * pbeheptr->y;
+        pcorte1.z = t * perdiptr->z + (1 - t) * pbeheptr->z;
+        pcorte1.u = t * perdiptr->u + (1 - t) * pbeheptr->u;
+        pcorte1.v = t * perdiptr->v + (1 - t) * pbeheptr->v;
 
-        // La funcion de dibujar linea lo hace de izquiera a derecha
-        // Por ello tenemos que asignarle al (x1,y1,z1) el punto
-        // de corte de menor x y al (x2,y2,z2) el punto de corte
-        // de mayor x
+        pcorte2.x = s * pgoiptr->x + (1 - s) * pbeheptr->x;
+        pcorte2.y = s * pgoiptr->y + (1 - s) * pbeheptr->y;
+        pcorte2.z = s * pgoiptr->z + (1 - s) * pbeheptr->z;
+        pcorte2.u = s * pgoiptr->u + (1 - s) * pbeheptr->u;
+        pcorte2.v = s * pgoiptr->v + (1 - s) * pbeheptr->v;
 
-        if (pgoiptr->x > perdiptr->x)
+        if (pcorte1.x > pcorte2.x)
         {
-            obtener_punto_corte(&pcorte1, perdiptr, pbeheptr, i);
-            obtener_punto_corte(&pcorte2, pgoiptr, pbeheptr, i);
+            pcortemayor = &pcorte1;
+            pcortemenor = &pcorte2;
         }
         else
         {
-            obtener_punto_corte(&pcorte1, pgoiptr, pbeheptr, i);
-            obtener_punto_corte(&pcorte2, perdiptr, pbeheptr, i);
+            pcortemayor = &pcorte2;
+            pcortemenor = &pcorte1;
         }
 
-        x1 = pcorte1.x;
-        x2 = pcorte2.x;
+        cambioj = 1 / (pcortemayor->x - pcortemenor->x);
 
-        z1 = pcorte1.z;
-        z2 = pcorte2.z;
+        for (j = 1; j > 0; j -= cambioj)
+        {
+            pcalculado.x = j * pcortemayor->x + (1 - j) * pcortemenor->x;
+            pcalculado.y = j * pcortemayor->y + (1 - j) * pcortemenor->y;
+            pcalculado.z = j * pcortemayor->z + (1 - j) * pcortemenor->z;
+            pcalculado.u = j * pcortemayor->u + (1 - j) * pcortemenor->u;
+            pcalculado.v = j * pcortemayor->v + (1 - j) * pcortemenor->v;
 
-        u1 = pcorte1.u;
-        u2 = pcorte2.u;
-
-        v1 = pcorte1.v;
-        v2 = pcorte2.v;
-
-        dibujar_linea_z(i, x1, z1, u1, v1, x2, z2, u2, v2);
+            glBegin(GL_POINTS);
+            colorv = color_textura(pcalculado.u, pcalculado.v);
+            r = colorv[0];
+            g = colorv[1];
+            b = colorv[2];
+            glColor3ub(r, g, b);
+            glVertex3f(pcalculado.x, pcalculado.y, pcalculado.z);
+            glEnd();
+        }
     }
-
-    */
 }
 
 static void marraztu(void)
