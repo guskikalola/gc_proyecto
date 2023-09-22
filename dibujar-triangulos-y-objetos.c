@@ -60,17 +60,17 @@ void objektuari_aldaketa_sartu_esk(double m[16])
 // debe devolver el pointer correspondiente a las coordenadas u y v
 unsigned char *color_textura(float u, float v)
 {
-    int desplazamendua;
+    // int desplazamendua;
     char *lag;
 
     int xp, yp;
 
     xp = u * dimx;
-    yp = (1-v) * dimy; 
+    yp = (1 - v) * dimy; // Hay que invertir la v porque la y va al reves ( en el array crece de arriba a abajo; en la imagen de abajo a arriba )
 
-    desplazamendua = 1;
-    lag = (unsigned char *)bufferra; // pixel on the left and top
-    return (lag + dimx * yp * 3 + xp * 3); // Hay que multiplicar por 3 porque cada punto tiene (r,g,b)
+    // desplazamendua = 1;
+    lag = (unsigned char *)bufferra;       // pixel on the left and top
+    return (lag + dimx * yp * 3 + xp * 3); // Hay que multiplicar por 3 porque cada punto son 3 posiciones (r,g,b)
     // return (lag + 3 * desplazamendua);
 }
 
@@ -125,137 +125,19 @@ void mxp(punto *pptr, double m[16], punto p)
     pptr->v = p.v;
 }
 
-void obtener_punto_corte(punto *pcorteptr, punto *psupptr, punto *pinfptr, int altura)
-{
-
-    /*
-        /\y ---> /\y'
-        /\x ---> /\x'
-
-        /\y = pinf->y - psup->y
-        /\y' = pcorte->y - psup->y
-
-        /\x = pinf->x - psup->x
-        /\x' = pcorte->x - psup->x
-
-        Queremos calcula pcorte->x
-        Hacemos la regla de tres para conseguir /\x'
-        Y extraemos pcorte->x de la ecuación
-    */
-
-    pcorteptr->y = altura;
-
-    int diffY = pinfptr->y - psupptr->y;    // deltaY
-    int diffYp = pcorteptr->y - psupptr->y; // deltaY'
-
-    int diffX = pinfptr->x - psupptr->x; // deltaX
-    // int diffXp = pcorteptr->x - psupptr->x; // deltaX'
-    int diffXp = (diffX * diffYp) / diffY;
-
-    pcorteptr->x = diffXp + psupptr->x;
-
-    /*
-        Hemos calculado (x,y)
-        Ahora vamos a calcular (z,u,v) usando el mismo metodo
-
-        /\y ---> /\y'
-        /\z ---> /\z'
-
-        /\y ---> /\y'
-        /\u ---> /\u'
-
-        /\y ---> /\y'
-        /\v ---> /\v'
-
-    */
-
-    int diffZ = pinfptr->z - psupptr->z;
-    // int diffZp = pcorteptr->z - psupptr->z;
-    int diffZp = (diffZ * diffYp) / diffY;
-    pcorteptr->z = diffZp + psupptr->z;
-
-    int diffU = pinfptr->u - psupptr->u;
-    // int diffUp = pcorteptr->u - psupptr->u;
-    int diffUp = (diffU * diffYp) / diffY;
-    pcorteptr->u = diffU + psupptr->u;
-
-    int diffV = pinfptr->v - psupptr->v;
-    // int diffVp = pcorteptr->v - psupptr->v;
-    int diffVp = (diffV * diffYp) / diffY;
-    pcorteptr->v = diffV + psupptr->v;
-}
-
-int max(int *listptr, int length)
-{
-    int i;
-    int max = listptr[0];
-
-    for (i = 0; i < length; i++)
-    {
-        if (listptr[i] > max)
-            max = *(listptr + i);
-    }
-
-    return max;
-}
-
-int min(int *listptr, int length)
-{
-    int i;
-    int min = listptr[0];
-
-    for (i = 0; i < length; i++)
-    {
-        if (listptr[i] < min)
-            min = *(listptr + i);
-    }
-
-    return min;
-}
-
-void calcular_maximo_minimo(hiruki *tptr, punto *pmin, punto *pmax)
-{
-    int listax[3];
-    int listay[3];
-    int listaz[3];
-
-    listax[0] = tptr->p1.x;
-    listax[1] = tptr->p2.x;
-    listax[2] = tptr->p3.x;
-
-    listay[0] = tptr->p1.y;
-    listay[1] = tptr->p2.y;
-    listay[2] = tptr->p3.y;
-
-    listaz[0] = tptr->p1.z;
-    listaz[1] = tptr->p2.z;
-    listaz[2] = tptr->p3.z;
-
-    pmin->x = min(listax, 3);
-    pmin->y = min(listay, 3);
-    pmin->z = min(listaz, 3);
-
-    pmax->x = max(listax, 3);
-    pmax->y = max(listay, 3);
-    pmax->z = max(listaz, 3);
-}
-
 void dibujar_triangulo(triobj *optr, int i)
 {
     hiruki *tptr;
 
     punto *pgoiptr, *pbeheptr, *perdiptr;
     float x1, h1, z1, u1, v1, x2, h2, z2, u2, v2, x3, h3, z3, u3, v3;
-    float c1x, c1z, c1u, c1v, c2x, c2z, c2u, c2v;
-    int linea;
-    float cambio1, cambio1z, cambio1u, cambio1v, cambio2, cambio2z, cambio2u, cambio2v;
+    // float c1x, c1z, c1u, c1v, c2x, c2z, c2u, c2v;
+    // int linea;
+    // float cambio1, cambio1z, cambio1u, cambio1v, cambio2, cambio2z, cambio2u, cambio2v;
     punto p1, p2, p3;
 
     float t, s, j;
     float cambiot, cambios, cambioj;
-
-    // punto pcorte1, pcorte2;
-    punto pmin, pmax;
 
     punto pcalculado, pcorte1, pcorte2;
     float alfa, beta, gamma;
@@ -321,7 +203,12 @@ void dibujar_triangulo(triobj *optr, int i)
     else
         cambios = 1 / (pgoiptr->y - pbeheptr->y);
 
-    // De A -> B (t)  y  A -> C (s)
+    // Vamos a utilizar las coordenadas baricentricas para calcular (x,y,z,u,v) para
+    // cada punto interior del triangulo. Para ello vamos a dividir el triangulo en
+    // dos secciones, la superior y la inferior. De esta manera solo tenemos que
+    // preocuparnos de ir calculando el punto de corte de dos lineas.
+
+    // De A -> B (avanzamos con t)  y  A -> C (avanzamos con s)
     for (t = 1, s = 1; t > 0; t = t - cambiot, s = s - cambios)
     {
         pcorte1.x = t * pgoiptr->x + (1 - t) * perdiptr->x;
@@ -347,7 +234,10 @@ void dibujar_triangulo(triobj *optr, int i)
             pcortemenor = &pcorte1;
         }
 
-        cambioj = 1 / (pcortemayor->x - pcortemenor->x);
+        if (pcortemayor->x - pcortemenor->x == 0)
+            cambioj = 1;
+        else
+            cambioj = 1 / (pcortemayor->x - pcortemenor->x);
 
         for (j = 1; j > 0; j -= cambioj)
         {
@@ -369,8 +259,14 @@ void dibujar_triangulo(triobj *optr, int i)
     }
 
     // Dibujar parte inferior
-    // Seguimos de la s anterior
-    // De B -> C (t)  y  A -> C (s)
+    // Seguimos de la s anterior, es decir
+    // seguimos desde el final del segmento
+    // superior del triangulo.
+    // La t la tenemos que volver a asignar
+    // a 1 porque la linea correspondiente a t
+    // la hemos cambiado.
+
+    // De B -> C (avanzamos con t)  y  A -> C (avanzamos con s)
 
     if (perdiptr->y - pbeheptr->y == 0)
         cambiot = 1;
@@ -401,7 +297,10 @@ void dibujar_triangulo(triobj *optr, int i)
             pcortemenor = &pcorte1;
         }
 
-        cambioj = 1 / (pcortemayor->x - pcortemenor->x);
+        if (pcortemayor->x - pcortemenor->x == 0)
+            cambioj = 1;
+        else
+            cambioj = 1 / (pcortemayor->x - pcortemenor->x);
 
         for (j = 1; j > 0; j -= cambioj)
         {
