@@ -17,6 +17,7 @@
 
 #define DESPLAZAMIENTO_TRANSLACION 5
 #define ANGULO_ROTACION 3.14159 / 8
+#define PROPORCION_ESCALADO 1.2
 
 #define TRANSLACION 't'
 #define ESCALADO 's'
@@ -508,7 +509,47 @@ void translacion(mlist *matriz_transformacion, int eje, int dir, int cantidad)
 
 void rotacion(mlist *matriz_transformacion, int eje, int dir, double angulo)
 {
-    int i, mul_dir;
+    int i;
+    float angulo_x_dir;
+    for (i = 0; i < 16; i++)
+        matriz_transformacion->m[i] = 0;
+
+    if (dir == DIR_ADELANTE)
+        angulo_x_dir = angulo;
+    else // dir == DIR_ATRAS
+        angulo_x_dir = (2*3.14159) - angulo;
+
+    if (eje == EJE_X)
+    {
+        matriz_transformacion->m[0] = 1;
+        matriz_transformacion->m[5] = cos(angulo_x_dir);
+        matriz_transformacion->m[6] = -sin(angulo_x_dir);
+        matriz_transformacion->m[9] = sin(angulo_x_dir);
+        matriz_transformacion->m[10] = cos(angulo_x_dir);
+    }
+    else if (eje == EJE_Y)
+    {
+        matriz_transformacion->m[5] = 1;
+        matriz_transformacion->m[0] = cos(angulo_x_dir);
+        matriz_transformacion->m[2] = sin(angulo_x_dir);
+        matriz_transformacion->m[8] = -sin(angulo_x_dir);
+        matriz_transformacion->m[10] = cos(angulo_x_dir);
+    }
+    else // EJE_Z
+    {
+        matriz_transformacion->m[0] = cos(angulo_x_dir);
+        matriz_transformacion->m[1] = -sin(angulo_x_dir);
+        matriz_transformacion->m[4] = sin(angulo_x_dir);
+        matriz_transformacion->m[5] = cos(angulo_x_dir);
+        matriz_transformacion->m[10] = 1;
+    }
+
+    matriz_transformacion->m[15] = 1;
+}
+
+void escalado(mlist *matriz_transformacion, int eje, int dir, int cantidad)
+{
+    int i, mul_dir, n, m, o;
     for (i = 0; i < 16; i++)
         matriz_transformacion->m[i] = 0;
 
@@ -519,30 +560,31 @@ void rotacion(mlist *matriz_transformacion, int eje, int dir, double angulo)
 
     if (eje == EJE_X)
     {
-        matriz_transformacion->m[0] = 1;
-        matriz_transformacion->m[5] = cos(angulo);
-        matriz_transformacion->m[6] = -sin(angulo);
-        matriz_transformacion->m[9] = sin(angulo);
-        matriz_transformacion->m[10] = cos(angulo);
+        m = cantidad * mul_dir;
+        n = 0;
+        o = 0;
     }
     else if (eje == EJE_Y)
     {
-        matriz_transformacion->m[5] = 1;
-        matriz_transformacion->m[0] = cos(angulo);
-        matriz_transformacion->m[2] = sin(angulo);
-        matriz_transformacion->m[8] = -sin(angulo);
-        matriz_transformacion->m[10] = cos(angulo);
+        m = 0;
+        n = cantidad * mul_dir;
+        o = 0;
     }
     else // EJE_Z
     {
-        matriz_transformacion->m[0] = cos(angulo);
-        matriz_transformacion->m[1] = -sin(angulo);
-        matriz_transformacion->m[4] = sin(angulo);
-        matriz_transformacion->m[5] = cos(angulo);
-        matriz_transformacion->m[10] = 1;
+        m = 0;
+        n = 0;
+        o = cantidad * mul_dir;
     }
 
+    matriz_transformacion->m[0] = 1;
+    matriz_transformacion->m[5] = 1;
+    matriz_transformacion->m[10] = 1;
     matriz_transformacion->m[15] = 1;
+
+    matriz_transformacion->m[3] = m;  // x
+    matriz_transformacion->m[7] = n;  // y
+    matriz_transformacion->m[11] = o; // z
 }
 
 void aplicar_transformacion(mlist *matriz_transformacionptr, int sistema_referencia)
@@ -572,15 +614,16 @@ void tratar_transformacion(int eje, int dir)
     {
     case TRANSLACION:
         translacion(&matriz_transformacion, eje, dir, DESPLAZAMIENTO_TRANSLACION);
-        aplicar_transformacion(&matriz_transformacion, ald_lokala);
         break;
     case ROTACION:
         rotacion(&matriz_transformacion, eje, dir, ANGULO_ROTACION);
-        aplicar_transformacion(&matriz_transformacion, ald_lokala);
         break;
+    case ESCALADO:
+        escalado(&matriz_transformacion, eje, dir, PROPORCION_ESCALADO);
     default:
         break;
     }
+    aplicar_transformacion(&matriz_transformacion, ald_lokala);
 }
 
 void x_aldaketa(int dir)
