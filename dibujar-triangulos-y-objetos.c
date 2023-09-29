@@ -14,6 +14,22 @@
 #include <string.h>
 #include "cargar-triangulo.h"
 
+#define DESPLAZAMIENTO_TRANSLACION 5
+
+#define TRANSLACION 't'
+#define ESCALADO 'e'
+#define ROTACION 'r'
+
+#define SISTEMA_LOCAL 0
+#define SISTEMA_MUNDO 1
+
+#define EJE_X 0
+#define EJE_Y 1
+#define EJE_Z 2
+
+#define DIR_ADELANTE 0
+#define DIR_ATRAS 1
+
 typedef struct mlist
 {
     double m[16];
@@ -118,11 +134,41 @@ void print_matrizea(char *str)
 // para más adelante
 void mxp(punto *pptr, double m[16], punto p)
 {
+    /*
     pptr->x = p.x;
     pptr->y = p.y;
     pptr->z = p.z;
     pptr->u = p.u;
     pptr->v = p.v;
+    */
+
+    print_matrizea("m:");
+
+    pptr->x = m[0] * p.x + m[1] * p.y + m[2] * p.z + m[3];
+    pptr->y = m[4] * p.x + m[5] * p.y + m[6] * p.z + m[7];
+    pptr->z = m[8] * p.x + m[9] * p.y + m[10] * p.z + m[11];
+    pptr->u = p.u;
+    pptr->v = p.v;
+}
+
+void mxm(double mresptr[16], double mA[16], double mB[16])
+{
+    /*
+    [ 0  1  2  3  |       [ 0  1  2  3  |
+    | 4  5  6  7  |  \/   | 4  5  6  7  |
+    | 8  9  10 11 |  /\   | 8  9  10 11 |
+    | 12 13 14 15 ]       | 12 13 14 15 ]
+
+    */
+
+    int iA, iB;
+    for (iA = 0; iA <= 12; iA += 4)
+    {
+        for (iB = 0; iB <= 3; iB++)
+        {
+            mresptr[iA + iB] = mA[iA] * mB[iB] + mA[iA + 1] * mB[iB + 4] + mA[iA + 2] * mB[iB + 8] + mA[iA + 3] * mB[iB + 12];
+        }
+    }
 }
 
 void dibujar_triangulo(triobj *optr, int i)
@@ -169,29 +215,29 @@ void dibujar_triangulo(triobj *optr, int i)
 
     // Calcular Psup, Pmed, Pinf
 
-    if (tptr->p1.y > tptr->p2.y)
+    if (p1.y > p2.y)
     {
-        pgoiptr = &tptr->p1;  // Psup <- P1
-        pbeheptr = &tptr->p2; // Pinf <- P2
+        pgoiptr = &p1;  // Psup <- P1
+        pbeheptr = &p2; // Pinf <- P2
     }
     else
     {
-        pgoiptr = &tptr->p2;  // Psup <- P2
-        pbeheptr = &tptr->p1; // Pinf <- P1
+        pgoiptr = &p2;  // Psup <- P2
+        pbeheptr = &p1; // Pinf <- P1
     }
 
-    if (tptr->p3.y > pgoiptr->y)
+    if (p3.y > pgoiptr->y)
     {
-        perdiptr = pgoiptr;  // Pmed <- Psup
-        pgoiptr = &tptr->p3; // Psup <- P3
+        perdiptr = pgoiptr; // Pmed <- Psup
+        pgoiptr = &p3;      // Psup <- P3
     }
-    else if (tptr->p3.y < pbeheptr->y)
+    else if (p3.y < pbeheptr->y)
     {
-        perdiptr = pbeheptr;  // Pmed <- Pinf
-        pbeheptr = &tptr->p3; // Psup <- P3
+        perdiptr = pbeheptr; // Pmed <- Pinf
+        pbeheptr = &p3;      // Psup <- P3
     }
     else
-        perdiptr = &tptr->p3; // Pmed <- P3
+        perdiptr = &p3; // Pmed <- P3
 
     if (pgoiptr->y - perdiptr->y == 0)
         cambiot = 1;
@@ -398,33 +444,132 @@ void read_from_file(char *fitx)
         optr->mptr = (mlist *)malloc(sizeof(mlist));
         for (i = 0; i < 16; i++)
             optr->mptr->m[i] = 0;
+        // Inicializa la matriz de identidad
         optr->mptr->m[0] = 1.0;
         optr->mptr->m[5] = 1.0;
         optr->mptr->m[10] = 1.0;
         optr->mptr->m[15] = 1.0;
-        optr->mptr->hptr = 0;
+        optr->mptr->hptr = 0; // La siguiente matriz ez "null"
         // printf("objektu zerrendara doa informazioa...\n");
-        optr->hptr = foptr;
-        foptr = optr;
+        optr->hptr = foptr; // el siguiente al objeto es el que antes era el primero
+        foptr = optr;       // foptr apunta al primer objeto ( el ultimo cargado )
         sel_ptr = optr;
     }
     printf("datuak irakurrita\nLecura finalizada\n");
 }
 
+void translacion(mlist *matriz_transformacion, int eje, int dir, int cantidad)
+{
+    int i, mul_dir, n, m, o;
+    for (i = 0; i < 16; i++)
+        matriz_transformacion->m[i] = 0;
+
+    if (dir == DIR_ADELANTE)
+        mul_dir = 1;
+    else // dir == DIR_ATRAS
+        mul_dir = -1;
+
+    if (eje == EJE_X)
+    {
+        m = cantidad * mul_dir;
+        n = 0;
+        o = 0;
+    }
+    else if (eje == EJE_Y)
+    {
+        m = 0;
+        n = cantidad * mul_dir;
+        o = 0;
+    }
+    else // EJE_Z
+    {
+        m = 0;
+        n = 0;
+        o = cantidad * mul_dir;
+    }
+
+    printf("EJE=%d  m=%d n=%d o=%d\n",eje, m,n,o);
+
+    matriz_transformacion->m[0] = 1;
+    matriz_transformacion->m[5] = 1;
+    matriz_transformacion->m[10] = 1;
+    matriz_transformacion->m[15] = 1;
+
+    matriz_transformacion->m[3] = m;  // x
+    matriz_transformacion->m[7] = n;  // y
+    matriz_transformacion->m[11] = o; // z
+}
+
+void aplicar_transformacion(mlist *matriz_transformacionptr, int sistema_referencia)
+{
+    mlist *nueva_matrizptr = (mlist *)malloc(sizeof(mlist));
+
+    if (sistema_referencia == SISTEMA_LOCAL)
+    {
+        // Multiplicar por la derecha
+        mxm(nueva_matrizptr->m, sel_ptr->mptr->m, matriz_transformacionptr->m);
+    }
+    else // SISTEMA_MUNDO
+    {
+        // Multiplicar por la izquierda
+        mxm(nueva_matrizptr->m, matriz_transformacionptr->m, sel_ptr->mptr->m);
+    }
+
+    nueva_matrizptr->hptr = sel_ptr->mptr;
+    sel_ptr->mptr = nueva_matrizptr;
+}
+
+void tratar_transformacion(int eje, int dir)
+{
+    mlist matriz_transformacion;
+
+    switch (aldaketa)
+    {
+    case TRANSLACION:
+        translacion(&matriz_transformacion, eje, dir, DESPLAZAMIENTO_TRANSLACION);
+        aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
+
+    default:
+        break;
+    }
+}
+
 void x_aldaketa(int dir)
 {
+    tratar_transformacion(EJE_X, dir);
 }
 
 void y_aldaketa(int dir)
 {
+    tratar_transformacion(EJE_Y, dir);
 }
 
 void z_aldaketa(int dir)
 {
+    tratar_transformacion(EJE_Z, dir);
 }
 
 void undo()
 {
+    /*
+
+    La matriz de identidad no la podemos borrar. Esa siempre va a estar en la lista.
+    Sabemos que hemos llegado a la identidad porque su hptr ( siguiente matriz ) tiene valor 0.
+
+    mlist
+        m2 -> m1 -> I -> 0
+
+    */
+
+   // DUDA: Hace falta liberar la matriz que vamos a borrar?
+   mlist* matriz_a_borrarptr;
+
+    if (sel_ptr->mptr->hptr != 0)
+    {
+        matriz_a_borrarptr = sel_ptr->mptr;
+        sel_ptr->mptr = sel_ptr->mptr->hptr;
+        free(matriz_a_borrarptr);
+    }
 }
 
 // This function will be called whenever the user pushes one key
@@ -484,22 +629,22 @@ static void teklatua(unsigned char key, int x, int y)
             ald_lokala = 1;
         break;
     case 'x':
-        x_aldaketa(1);
+        x_aldaketa(DIR_ADELANTE);
         break;
     case 'y':
-        y_aldaketa(1);
+        y_aldaketa(DIR_ADELANTE);
         break;
     case 'z':
-        z_aldaketa(1);
+        z_aldaketa(DIR_ADELANTE);
         break;
     case 'X':
-        x_aldaketa(0);
+        x_aldaketa(DIR_ATRAS);
         break;
     case 'Y':
-        y_aldaketa(0);
+        y_aldaketa(DIR_ATRAS);
         break;
     case 'Z':
-        z_aldaketa(0);
+        z_aldaketa(DIR_ATRAS);
         break;
     case 'u':
         undo();
