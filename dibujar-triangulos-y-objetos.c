@@ -16,14 +16,14 @@
 #include "cargar-triangulo.h"
 
 #define DESPLAZAMIENTO_TRANSLACION 5
-#define ANGULO_ROTACION 5
+#define ANGULO_ROTACION 3.14159 / 8
 
 #define TRANSLACION 't'
-#define ESCALADO 'e'
+#define ESCALADO 's'
 #define ROTACION 'r'
 
-#define SISTEMA_LOCAL 0
-#define SISTEMA_MUNDO 1
+#define SISTEMA_MUNDO 0
+#define SISTEMA_LOCAL 1
 
 #define EJE_X 0
 #define EJE_Y 1
@@ -306,6 +306,11 @@ void dibujar_triangulo(triobj *optr, int i)
         }
     }
 
+    // Tenemos que sumarle para cancelar el cambio de mas que ha hecho en la ultima iteracion.
+    // Si no hacemos esto la s va a tomar valores negativos en el siguiente for porque empieza
+    // un desplazamiento mas abajo del que deberia
+    s += cambios;
+
     // Dibujar parte inferior
     // Seguimos de la s anterior, es decir
     // seguimos desde el final del segmento
@@ -320,6 +325,7 @@ void dibujar_triangulo(triobj *optr, int i)
         cambiot = 1;
     else
         cambiot = 1 / (perdiptr->y - pbeheptr->y);
+
     for (t = 1; t > 0; t = t - cambiot, s = s - cambios)
     {
         pcorte1.x = t * perdiptr->x + (1 - t) * pbeheptr->x;
@@ -566,11 +572,11 @@ void tratar_transformacion(int eje, int dir)
     {
     case TRANSLACION:
         translacion(&matriz_transformacion, eje, dir, DESPLAZAMIENTO_TRANSLACION);
-        aplicar_transformacion(&matriz_transformacion, SISTEMA_MUNDO);
+        aplicar_transformacion(&matriz_transformacion, ald_lokala);
         break;
     case ROTACION:
         rotacion(&matriz_transformacion, eje, dir, ANGULO_ROTACION);
-        aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL); // No funciona como deberia
+        aplicar_transformacion(&matriz_transformacion, ald_lokala);
         break;
     default:
         break;
@@ -664,6 +670,9 @@ static void teklatua(unsigned char key, int x, int y)
         break;
     case 'r':
         aldaketa = 'r';
+        break;
+    case 's':
+        aldaketa = 's';
         break;
     case 'g':
         if (ald_lokala == 1)
