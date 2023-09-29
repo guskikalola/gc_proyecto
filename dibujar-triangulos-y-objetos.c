@@ -16,7 +16,7 @@
 #include "cargar-triangulo.h"
 
 #define DESPLAZAMIENTO_TRANSLACION 5
-#define ANGULO_ROTACION 3.14159 / 8
+#define ANGULO_ROTACION 3.14159 / 90
 #define PROPORCION_ESCALADO 1.2
 
 #define TRANSLACION 't'
@@ -87,39 +87,51 @@ unsigned char *color_textura(float u, float v)
     xp = u * dimx;
     yp = (1 - v) * dimy; // Hay que invertir la v porque la y va al reves ( en el array crece de arriba a abajo; en la imagen de abajo a arriba )
 
-    // desplazamendua = 1;
     lag = (unsigned char *)bufferra;       // pixel on the left and top
     return (lag + dimx * yp * 3 + xp * 3); // Hay que multiplicar por 3 porque cada punto son 3 posiciones (r,g,b)
-    // return (lag + 3 * desplazamendua);
 }
 
-// TODO
-// lerroa marrazten du, baina testuraren kodea egokitu behar da
-// dibuja una linea pero hay que codificar la textura
-void dibujar_linea_z(int linea, float c1x, float c1z, float c1u, float c1v, float c2x, float c2z, float c2u, float c2v)
+void dibujar_linea(punto p1, punto p2)
 {
-    float xkoord, zkoord;
-    float u, v;
+    float j;
     unsigned char r, g, b;
     unsigned char *colorv;
-
-    glBegin(GL_POINTS);
-    for (xkoord = c1x, zkoord = c1z, u = c1u, v = c1v; xkoord <= c2x; xkoord++)
+    punto *pcortemayor, *pcortemenor;
+    punto pcalculado;
+    double cambioj;
+    if (p1.x > p2.x)
     {
-        // TODO
-        // color_textura funtzioa ondo kodetu
-        // programar de forma correcta la función color_textura
-        colorv = color_textura(u, v);
+        pcortemayor = &p1;
+        pcortemenor = &p2;
+    }
+    else
+    {
+        pcortemayor = &p2;
+        pcortemenor = &p1;
+    }
+
+    if (pcortemayor->x - pcortemenor->x == 0)
+        cambioj = 1;
+    else
+        cambioj = 1 / (pcortemayor->x - pcortemenor->x);
+
+    for (j = 1; j > 0; j -= cambioj)
+    {
+        pcalculado.x = j * pcortemayor->x + (1 - j) * pcortemenor->x;
+        pcalculado.y = j * pcortemayor->y + (1 - j) * pcortemenor->y;
+        pcalculado.z = j * pcortemayor->z + (1 - j) * pcortemenor->z;
+        pcalculado.u = j * pcortemayor->u + (1 - j) * pcortemenor->u;
+        pcalculado.v = j * pcortemayor->v + (1 - j) * pcortemenor->v;
+
+        glBegin(GL_POINTS);
+        colorv = color_textura(pcalculado.u, pcalculado.v);
         r = colorv[0];
         g = colorv[1];
         b = colorv[2];
         glColor3ub(r, g, b);
-        glVertex3f(xkoord, linea, zkoord);
-        // TODO
-        // zkoord, u eta v berriak kalkulatu eskuineko puntuarentzat
-        // calcular zkoord, u y v del siguiente pixel
+        glVertex3f(pcalculado.x, pcalculado.y, pcalculado.z);
+        glEnd();
     }
-    glEnd();
 }
 
 void print_matrizea(char *str)
@@ -179,22 +191,12 @@ void dibujar_triangulo(triobj *optr, int i)
     hiruki *tptr;
 
     punto *pgoiptr, *pbeheptr, *perdiptr;
-    float x1, h1, z1, u1, v1, x2, h2, z2, u2, v2, x3, h3, z3, u3, v3;
-    // float c1x, c1z, c1u, c1v, c2x, c2z, c2u, c2v;
-    // int linea;
-    // float cambio1, cambio1z, cambio1u, cambio1v, cambio2, cambio2z, cambio2u, cambio2v;
     punto p1, p2, p3;
 
-    float t, s, j;
-    float cambiot, cambios, cambioj;
+    float t, s;
+    float cambiot, cambios;
 
-    punto pcalculado, pcorte1, pcorte2;
-    float alfa, beta, gamma;
-
-    punto *pcortemayor, *pcortemenor;
-
-    unsigned char r, g, b;
-    unsigned char *colorv;
+    punto pcorte1, pcorte2;
 
     if (i >= optr->num_triangles)
         return;
@@ -272,39 +274,7 @@ void dibujar_triangulo(triobj *optr, int i)
         pcorte2.u = s * pgoiptr->u + (1 - s) * pbeheptr->u;
         pcorte2.v = s * pgoiptr->v + (1 - s) * pbeheptr->v;
 
-        if (pcorte1.x > pcorte2.x)
-        {
-            pcortemayor = &pcorte1;
-            pcortemenor = &pcorte2;
-        }
-        else
-        {
-            pcortemayor = &pcorte2;
-            pcortemenor = &pcorte1;
-        }
-
-        if (pcortemayor->x - pcortemenor->x == 0)
-            cambioj = 1;
-        else
-            cambioj = 1 / (pcortemayor->x - pcortemenor->x);
-
-        for (j = 1; j > 0; j -= cambioj)
-        {
-            pcalculado.x = j * pcortemayor->x + (1 - j) * pcortemenor->x;
-            pcalculado.y = j * pcortemayor->y + (1 - j) * pcortemenor->y;
-            pcalculado.z = j * pcortemayor->z + (1 - j) * pcortemenor->z;
-            pcalculado.u = j * pcortemayor->u + (1 - j) * pcortemenor->u;
-            pcalculado.v = j * pcortemayor->v + (1 - j) * pcortemenor->v;
-
-            glBegin(GL_POINTS);
-            colorv = color_textura(pcalculado.u, pcalculado.v);
-            r = colorv[0];
-            g = colorv[1];
-            b = colorv[2];
-            glColor3ub(r, g, b);
-            glVertex3f(pcalculado.x, pcalculado.y, pcalculado.z);
-            glEnd();
-        }
+        dibujar_linea(pcorte1, pcorte2);
     }
 
     // Tenemos que sumarle para cancelar el cambio de mas que ha hecho en la ultima iteracion.
@@ -341,39 +311,7 @@ void dibujar_triangulo(triobj *optr, int i)
         pcorte2.u = s * pgoiptr->u + (1 - s) * pbeheptr->u;
         pcorte2.v = s * pgoiptr->v + (1 - s) * pbeheptr->v;
 
-        if (pcorte1.x > pcorte2.x)
-        {
-            pcortemayor = &pcorte1;
-            pcortemenor = &pcorte2;
-        }
-        else
-        {
-            pcortemayor = &pcorte2;
-            pcortemenor = &pcorte1;
-        }
-
-        if (pcortemayor->x - pcortemenor->x == 0)
-            cambioj = 1;
-        else
-            cambioj = 1 / (pcortemayor->x - pcortemenor->x);
-
-        for (j = 1; j > 0; j -= cambioj)
-        {
-            pcalculado.x = j * pcortemayor->x + (1 - j) * pcortemenor->x;
-            pcalculado.y = j * pcortemayor->y + (1 - j) * pcortemenor->y;
-            pcalculado.z = j * pcortemayor->z + (1 - j) * pcortemenor->z;
-            pcalculado.u = j * pcortemayor->u + (1 - j) * pcortemenor->u;
-            pcalculado.v = j * pcortemayor->v + (1 - j) * pcortemenor->v;
-
-            glBegin(GL_POINTS);
-            colorv = color_textura(pcalculado.u, pcalculado.v);
-            r = colorv[0];
-            g = colorv[1];
-            b = colorv[2];
-            glColor3ub(r, g, b);
-            glVertex3f(pcalculado.x, pcalculado.y, pcalculado.z);
-            glEnd();
-        }
+        dibujar_linea(pcorte1, pcorte2);
     }
 }
 
@@ -517,7 +455,7 @@ void rotacion(mlist *matriz_transformacion, int eje, int dir, double angulo)
     if (dir == DIR_ADELANTE)
         angulo_x_dir = angulo;
     else // dir == DIR_ATRAS
-        angulo_x_dir = (2*3.14159) - angulo;
+        angulo_x_dir = (2 * 3.14159) - angulo;
 
     if (eje == EJE_X)
     {
@@ -547,44 +485,41 @@ void rotacion(mlist *matriz_transformacion, int eje, int dir, double angulo)
     matriz_transformacion->m[15] = 1;
 }
 
-void escalado(mlist *matriz_transformacion, int eje, int dir, int cantidad)
+void escalado(mlist *matriz_transformacion, int eje, int dir, float proporcion)
 {
-    int i, mul_dir, n, m, o;
+    int i;
+    float p, q, r, mul_dir;
     for (i = 0; i < 16; i++)
         matriz_transformacion->m[i] = 0;
 
     if (dir == DIR_ADELANTE)
         mul_dir = 1;
     else // dir == DIR_ATRAS
-        mul_dir = -1;
+        mul_dir = 0.5 / proporcion;
 
     if (eje == EJE_X)
     {
-        m = cantidad * mul_dir;
-        n = 0;
-        o = 0;
+        p = proporcion * mul_dir;
+        q = 1;
+        r = 1;
     }
     else if (eje == EJE_Y)
     {
-        m = 0;
-        n = cantidad * mul_dir;
-        o = 0;
+        p = 1;
+        q = proporcion * mul_dir;
+        r = 1;
     }
     else // EJE_Z
     {
-        m = 0;
-        n = 0;
-        o = cantidad * mul_dir;
+        p = 1;
+        q = 1;
+        r = proporcion * mul_dir;
     }
 
-    matriz_transformacion->m[0] = 1;
-    matriz_transformacion->m[5] = 1;
-    matriz_transformacion->m[10] = 1;
+    matriz_transformacion->m[0] = p;  // x
+    matriz_transformacion->m[5] = q;  // y
+    matriz_transformacion->m[10] = r; // z
     matriz_transformacion->m[15] = 1;
-
-    matriz_transformacion->m[3] = m;  // x
-    matriz_transformacion->m[7] = n;  // y
-    matriz_transformacion->m[11] = o; // z
 }
 
 void aplicar_transformacion(mlist *matriz_transformacionptr, int sistema_referencia)
