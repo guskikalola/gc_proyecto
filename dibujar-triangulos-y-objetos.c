@@ -12,9 +12,11 @@
 #include <GL/glut.h>
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 #include "cargar-triangulo.h"
 
 #define DESPLAZAMIENTO_TRANSLACION 5
+#define ANGULO_ROTACION 5
 
 #define TRANSLACION 't'
 #define ESCALADO 'e'
@@ -488,8 +490,6 @@ void translacion(mlist *matriz_transformacion, int eje, int dir, int cantidad)
         o = cantidad * mul_dir;
     }
 
-    printf("EJE=%d  m=%d n=%d o=%d\n",eje, m,n,o);
-
     matriz_transformacion->m[0] = 1;
     matriz_transformacion->m[5] = 1;
     matriz_transformacion->m[10] = 1;
@@ -498,6 +498,45 @@ void translacion(mlist *matriz_transformacion, int eje, int dir, int cantidad)
     matriz_transformacion->m[3] = m;  // x
     matriz_transformacion->m[7] = n;  // y
     matriz_transformacion->m[11] = o; // z
+}
+
+void rotacion(mlist *matriz_transformacion, int eje, int dir, double angulo)
+{
+    int i, mul_dir;
+    for (i = 0; i < 16; i++)
+        matriz_transformacion->m[i] = 0;
+
+    if (dir == DIR_ADELANTE)
+        mul_dir = 1;
+    else // dir == DIR_ATRAS
+        mul_dir = -1;
+
+    if (eje == EJE_X)
+    {
+        matriz_transformacion->m[0] = 1;
+        matriz_transformacion->m[5] = cos(angulo);
+        matriz_transformacion->m[6] = -sin(angulo);
+        matriz_transformacion->m[9] = sin(angulo);
+        matriz_transformacion->m[10] = cos(angulo);
+    }
+    else if (eje == EJE_Y)
+    {
+        matriz_transformacion->m[5] = 1;
+        matriz_transformacion->m[0] = cos(angulo);
+        matriz_transformacion->m[2] = sin(angulo);
+        matriz_transformacion->m[8] = -sin(angulo);
+        matriz_transformacion->m[10] = cos(angulo);
+    }
+    else // EJE_Z
+    {
+        matriz_transformacion->m[0] = cos(angulo);
+        matriz_transformacion->m[1] = -sin(angulo);
+        matriz_transformacion->m[4] = sin(angulo);
+        matriz_transformacion->m[5] = cos(angulo);
+        matriz_transformacion->m[10] = 1;
+    }
+
+    matriz_transformacion->m[15] = 1;
 }
 
 void aplicar_transformacion(mlist *matriz_transformacionptr, int sistema_referencia)
@@ -527,8 +566,12 @@ void tratar_transformacion(int eje, int dir)
     {
     case TRANSLACION:
         translacion(&matriz_transformacion, eje, dir, DESPLAZAMIENTO_TRANSLACION);
-        aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
-
+        aplicar_transformacion(&matriz_transformacion, SISTEMA_MUNDO);
+        break;
+    case ROTACION:
+        rotacion(&matriz_transformacion, eje, dir, ANGULO_ROTACION);
+        aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL); // No funciona como deberia
+        break;
     default:
         break;
     }
@@ -561,8 +604,8 @@ void undo()
 
     */
 
-   // DUDA: Hace falta liberar la matriz que vamos a borrar?
-   mlist* matriz_a_borrarptr;
+    // DUDA: Hace falta liberar la matriz que vamos a borrar?
+    mlist *matriz_a_borrarptr;
 
     if (sel_ptr->mptr->hptr != 0)
     {
