@@ -66,14 +66,6 @@ int ald_lokala;
 
 char fitxiz[100];
 
-void objektuari_aldaketa_sartu_ezk(double m[16])
-{
-}
-
-void objektuari_aldaketa_sartu_esk(double m[16])
-{
-}
-
 // TODO
 // funtzio honek u eta v koordenatuei dagokien pointerra itzuli behar du.
 // debe devolver el pointer correspondiente a las coordenadas u y v
@@ -149,15 +141,7 @@ void print_matrizea(char *str)
 // para más adelante
 void mxp(punto *pptr, double m[16], punto p)
 {
-    /*
-    pptr->x = p.x;
-    pptr->y = p.y;
-    pptr->z = p.z;
-    pptr->u = p.u;
-    pptr->v = p.v;
-    */
-
-    print_matrizea("m:");
+    // print_matrizea("m:");
 
     pptr->x = m[0] * p.x + m[1] * p.y + m[2] * p.z + m[3];
     pptr->y = m[4] * p.x + m[5] * p.y + m[6] * p.z + m[7];
@@ -243,6 +227,31 @@ void dibujar_triangulo(triobj *optr, int i)
     }
     else
         perdiptr = &p3; // Pmed <- P3
+
+    // Triangulo es una linea
+    if (p1.y == p2.y && p2.y == p3.y)
+    {
+        // Coger la y min y la y max y punto de min a max
+        if(p1.x > p2.x)
+        {
+            pcorte1 = p1;
+            pcorte2 = p2;
+        } else {
+            pcorte1 = p2;
+            pcorte2 = p1;
+        }
+
+        if(p3.x > pcorte1.x)
+        {
+            pcorte1 = p3;
+        } else if (p3.x < pcorte2.x)
+        {
+            pcorte2 = p3;
+        }
+        
+        dibujar_linea(pcorte1, pcorte2);
+        return;
+    }
 
     if (pgoiptr->y - perdiptr->y == 0)
         cambiot = 1;
