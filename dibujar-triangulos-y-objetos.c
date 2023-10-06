@@ -29,6 +29,7 @@
 #define EJE_X 0
 #define EJE_Y 1
 #define EJE_Z 2
+#define EJE_NULL 3
 
 #define DIR_ADELANTE 0
 #define DIR_ATRAS 1
@@ -232,23 +233,26 @@ void dibujar_triangulo(triobj *optr, int i)
     if (p1.y == p2.y && p2.y == p3.y)
     {
         // Coger la y min y la y max y punto de min a max
-        if(p1.x > p2.x)
+        if (p1.x > p2.x)
         {
             pcorte1 = p1;
             pcorte2 = p2;
-        } else {
+        }
+        else
+        {
             pcorte1 = p2;
             pcorte2 = p1;
         }
 
-        if(p3.x > pcorte1.x)
+        if (p3.x > pcorte1.x)
         {
             pcorte1 = p3;
-        } else if (p3.x < pcorte2.x)
+        }
+        else if (p3.x < pcorte2.x)
         {
             pcorte2 = p3;
         }
-        
+
         dibujar_linea(pcorte1, pcorte2);
         return;
     }
@@ -494,41 +498,31 @@ void rotacion(mlist *matriz_transformacion, int eje, int dir, double angulo)
     matriz_transformacion->m[15] = 1;
 }
 
-void escalado(mlist *matriz_transformacion, int eje, int dir, float proporcion)
+void escalado(mlist *matriz_transformacion, int dir, float proporcion)
 {
+    if(proporcion <= 0) return; // Directamente evitamos que se pueda pasar 0, evitando division /0
+
     int i;
-    float p, q, r, mul_dir;
     for (i = 0; i < 16; i++)
+    {
         matriz_transformacion->m[i] = 0;
+    }
 
     if (dir == DIR_ADELANTE)
-        mul_dir = 1;
+    {
+        matriz_transformacion->m[0] = proporcion;  // x
+        matriz_transformacion->m[5] = proporcion;  // y
+        matriz_transformacion->m[10] = proporcion; // z
+        matriz_transformacion->m[15] = 1;
+    }
     else // dir == DIR_ATRAS
-        mul_dir = 0.5 / proporcion;
-
-    if (eje == EJE_X)
     {
-        p = proporcion * mul_dir;
-        q = 1;
-        r = 1;
-    }
-    else if (eje == EJE_Y)
-    {
-        p = 1;
-        q = proporcion * mul_dir;
-        r = 1;
-    }
-    else // EJE_Z
-    {
-        p = 1;
-        q = 1;
-        r = proporcion * mul_dir;
+        matriz_transformacion->m[0] = 1/proporcion;  // x
+        matriz_transformacion->m[5] = 1/proporcion;  // y
+        matriz_transformacion->m[10] = 1/proporcion; // z
+        matriz_transformacion->m[15] = 1;
     }
 
-    matriz_transformacion->m[0] = p;  // x
-    matriz_transformacion->m[5] = q;  // y
-    matriz_transformacion->m[10] = r; // z
-    matriz_transformacion->m[15] = 1;
 }
 
 void aplicar_transformacion(mlist *matriz_transformacionptr, int sistema_referencia)
@@ -563,7 +557,9 @@ void tratar_transformacion(int eje, int dir)
         rotacion(&matriz_transformacion, eje, dir, ANGULO_ROTACION);
         break;
     case ESCALADO:
-        escalado(&matriz_transformacion, eje, dir, PROPORCION_ESCALADO);
+        if(eje != EJE_NULL) return;
+        escalado(&matriz_transformacion, dir, PROPORCION_ESCALADO);
+        break;
     default:
         break;
     }
@@ -660,12 +656,22 @@ static void teklatua(unsigned char key, int x, int y)
         break;
     case 's':
         aldaketa = 's';
+        tratar_transformacion(EJE_NULL, DIR_ADELANTE);
+        break;
+    case 'S':
+        aldaketa = 's';
+        tratar_transformacion(EJE_NULL, DIR_ATRAS);
         break;
     case 'g':
         if (ald_lokala == 1)
             ald_lokala = 0;
         else
             ald_lokala = 1;
+
+        if (ald_lokala == SISTEMA_LOCAL)
+            printf("Cambiado a sistema local\n");
+        else
+            printf("Cambiado al sistema del mundo\n");
         break;
     case 'x':
         x_aldaketa(DIR_ADELANTE);
