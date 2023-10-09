@@ -72,7 +72,6 @@ char fitxiz[100];
 // debe devolver el pointer correspondiente a las coordenadas u y v
 unsigned char *color_textura(float u, float v)
 {
-    // int desplazamendua;
     char *lag;
 
     int xp, yp;
@@ -593,7 +592,6 @@ void undo()
 
     */
 
-    // DUDA: Hace falta liberar la matriz que vamos a borrar?
     mlist *matriz_a_borrarptr;
 
     if (sel_ptr->mptr->hptr != 0)
