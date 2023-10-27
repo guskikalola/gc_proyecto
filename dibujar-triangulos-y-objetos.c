@@ -34,6 +34,10 @@
 #define DIR_ADELANTE 0
 #define DIR_ATRAS 1
 
+#define LISTA_OBJETOS 0
+#define LISTA_CAMARAS 1
+// #define LISTA_LUCES 2
+
 typedef struct mlist
 {
     double m[16];
@@ -56,11 +60,20 @@ unsigned char *bufferra;
 int dimx, dimy;
 
 int indexx;
-hiruki *triangulosptr;
-triobj *foptr;
-triobj *sel_ptr;
-triobj *camara_ptr; // Puntero a la camara activa
-int camara_activa;  // Si tenemos la camara activa o no
+hiruki *triangulosptr; // Lista de objetos
+
+triobj *objetosptr; // Lista de objetos ( Apunta al primer objeto )
+triobj *obj_ptr;    // Puntero al objeto seleccionado de la lista
+
+triobj *camarasptr; // Lista de camaras ( Apunta a la primera camara )
+triobj *camara_ptr; // Puntero a la camara seleccionada de la lista
+
+int lista_activa; // Indicador de la lista actualmente activa ( Camaras, objetos, ... ). Solo lectura
+
+triobj **foptr;   // Puntero al puntero del primer objeto de la lista activa (independiente de la lista)
+triobj **sel_ptr; // Puntero al puntero del objeto actualmente seleccionado (independiente de la lista)
+
+int camara_activa; // Si estamos viendo desde la camara o no ( en caso negativo vemos desde objeto )
 int denak;
 int lineak;
 int objektuak;
@@ -128,14 +141,53 @@ void dibujar_linea(punto p1, punto p2)
     }
 }
 
+// Teniendo el cuenta la lista activa cambia sel_ptr al siguiente elemento
+void siguiente_elemento_lista()
+{
+    if ((*foptr) != 0) // objekturik gabe ez du ezer egin behar
+                       // si no hay objeto no hace nada
+    {
+        (*sel_ptr) = (*sel_ptr)->hptr;
+        /*The selection is circular, thus if we move out of the list we go back to the first element*/
+        if ((*sel_ptr) == 0)
+            (*sel_ptr) = (*foptr);
+        indexx = 0; // the selected polygon is the first one
+    }
+}
+
+// Cambia cual es la lista activa, haciendo que sel_ptr apunte al elemento seleccionado de esa lista
+// Y foptr al primer elemento de esa lista
+void cambiar_lista_activa(int lista)
+{
+    char *nombre_lista;
+
+    switch (lista)
+    {
+    case LISTA_OBJETOS:
+        sel_ptr = &obj_ptr;
+        foptr = &objetosptr;
+        nombre_lista = "LISTA_OBJETOS";
+        break;
+    case LISTA_CAMARAS:
+        sel_ptr = &camara_ptr;
+        foptr = &camarasptr;
+        nombre_lista = "LISTA_CAMARAS";
+        break;
+    }
+
+    lista_activa = lista;
+
+    printf("Se ha cambiado la lista activa a: %s\n", nombre_lista);
+}
+
 void print_matrizea(char *str)
 {
     int i;
 
     printf("%s\n", str);
     for (i = 0; i < 4; i++)
-        printf("%lf, %lf, %lf, %lf\n", sel_ptr->mptr->m[i * 4], sel_ptr->mptr->m[i * 4 + 1], sel_ptr->mptr->m[i * 4 + 2],
-               sel_ptr->mptr->m[i * 4 + 3]);
+        printf("%lf, %lf, %lf, %lf\n", (*sel_ptr)->mptr->m[i * 4], (*sel_ptr)->mptr->m[i * 4 + 1], (*sel_ptr)->mptr->m[i * 4 + 2],
+               (*sel_ptr)->mptr->m[i * 4 + 3]);
 }
 
 // TODO
@@ -426,12 +478,20 @@ static void marraztu(void)
     glLoadIdentity();
     glOrtho(-500.0, 500.0, -500.0, 500.0, -500.0, 500.0);
 
-    triangulosptr = sel_ptr->triptr;
+    triangulosptr = (*sel_ptr)->triptr;
     if (objektuak == 1)
     {
         if (denak == 1)
         {
-            for (auxptr = foptr; auxptr != 0; auxptr = auxptr->hptr)
+            for (auxptr = objetosptr; auxptr != 0; auxptr = auxptr->hptr)
+            {
+                for (i = 0; i < auxptr->num_triangles; i++)
+                {
+                    dibujar_triangulo(auxptr, i);
+                }
+            }
+
+            for (auxptr = camarasptr; auxptr != 0; auxptr = auxptr->hptr)
             {
                 for (i = 0; i < auxptr->num_triangles; i++)
                 {
@@ -441,23 +501,43 @@ static void marraztu(void)
         }
         else
         {
-            for (i = 0; i < sel_ptr->num_triangles; i++)
+            for (i = 0; i < (*sel_ptr)->num_triangles; i++)
             {
-                dibujar_triangulo(sel_ptr, i);
+                dibujar_triangulo((*sel_ptr), i);
             }
         }
     }
     else
     {
-        dibujar_triangulo(sel_ptr, indexx);
+        dibujar_triangulo((*sel_ptr), indexx);
     }
     glFlush();
 }
 
-void read_from_file(char *fitx)
+void read_from_file(char *fitx, int tipo_lista)
 {
     int i, retval;
     triobj *optr;
+
+    // hiruki **listaptrptr;
+    // hiruki **ultimo_listaptrptr;
+
+    // switch (tipo_lista)
+    // {
+    // case LISTA_CAMARAS:
+    //     ultimo_listaptrptr = &camarasptr;
+    //     break;
+    // case LISTA_OBJETOS:
+    //     ultimo_listaptrptr = &objetosptr;
+    //     break;
+    // }
+
+    cambiar_lista_activa(tipo_lista);
+    // Se va a añadir el objeto nuevo a la lista que toca
+    // Ademas se va a cambiar el objeto seleccionado al nuevo
+    // haciendo que las transformaciones se apliquen sobre este.
+    // Esto no cambia que si estabas viendo desde la camara cambie
+    // a ver desde el objeto
 
     // printf("%s fitxategitik datuak hartzera\n",fitx);
     optr = (triobj *)malloc(sizeof(triobj));
@@ -480,10 +560,10 @@ void read_from_file(char *fitx)
         optr->mptr->m[10] = 1.0;
         optr->mptr->m[15] = 1.0;
         optr->mptr->hptr = 0; // La siguiente matriz ez "null"
-        // printf("objektu zerrendara doa informazioa...\n");
-        optr->hptr = foptr; // el siguiente al objeto es el que antes era el primero
-        foptr = optr;       // foptr apunta al primer objeto ( el ultimo cargado )
-        sel_ptr = optr;
+        // printf("objektu zerrendara doa informazioa...\n");ultimo_listaptrptr
+        optr->hptr = (*foptr); // el siguiente al objeto es el que antes era el primero
+        (*foptr) = optr;       // foptr(cambiado a un ptrptr que apunta dependiendo de la lista) apunta al primer objeto ( el ultimo cargado )
+        (*sel_ptr) = optr;
     }
     printf("datuak irakurrita\nLecura finalizada\n");
 }
@@ -602,16 +682,16 @@ void aplicar_transformacion(mlist *matriz_transformacionptr, int sistema_referen
     if (sistema_referencia == SISTEMA_LOCAL)
     {
         // Multiplicar por la derecha
-        mxm(nueva_matrizptr->m, sel_ptr->mptr->m, matriz_transformacionptr->m);
+        mxm(nueva_matrizptr->m, (*sel_ptr)->mptr->m, matriz_transformacionptr->m);
     }
     else // SISTEMA_MUNDO
     {
         // Multiplicar por la izquierda
-        mxm(nueva_matrizptr->m, matriz_transformacionptr->m, sel_ptr->mptr->m);
+        mxm(nueva_matrizptr->m, matriz_transformacionptr->m, (*sel_ptr)->mptr->m);
     }
 
-    nueva_matrizptr->hptr = sel_ptr->mptr;
-    sel_ptr->mptr = nueva_matrizptr;
+    nueva_matrizptr->hptr = (*sel_ptr)->mptr;
+    (*sel_ptr)->mptr = nueva_matrizptr;
 }
 
 void tratar_transformacion(int eje, int dir)
@@ -666,10 +746,10 @@ void undo()
 
     mlist *matriz_a_borrarptr;
 
-    if (sel_ptr->mptr->hptr != 0)
+    if ((*sel_ptr)->mptr->hptr != 0)
     {
-        matriz_a_borrarptr = sel_ptr->mptr;
-        sel_ptr->mptr = sel_ptr->mptr->hptr;
+        matriz_a_borrarptr = (*sel_ptr)->mptr;
+        (*sel_ptr)->mptr = (*sel_ptr)->mptr->hptr;
         free(matriz_a_borrarptr);
     }
 }
@@ -684,12 +764,12 @@ static void teklatua(unsigned char key, int x, int y)
     switch (key)
     {
     case 13:
-        if (foptr != 0) // objekturik ez badago ezer ez du egin behar
-                        // si no hay objeto que no haga nada
+        if ((*foptr) != 0) // objekturik ez badago ezer ez du egin behar
+                           // si no hay objeto que no haga nada
         {
             indexx++; // azkena bada lehenengoa bihurtu
                       // pero si es el último? hay que controlarlo!
-            if (indexx == sel_ptr->num_triangles)
+            if (indexx == (*sel_ptr)->num_triangles)
             {
                 indexx = 0;
                 if ((denak == 1) && (objektuak == 0))
@@ -764,18 +844,29 @@ static void teklatua(unsigned char key, int x, int y)
     case 'u':
         undo();
         break;
-    case 'j':
-        printf("Camara activa %d\n", camara_activa);
-        if (camara_activa == 1)
-            camara_activa = 0;
+    case 'c':
+        if (lista_activa == LISTA_CAMARAS)
+            cambiar_lista_activa(LISTA_OBJETOS);
         else
+            cambiar_lista_activa(LISTA_CAMARAS);
+        break;
+    case 'C':
+        if (camara_activa == 0)
+        {
+            printf("Viendo el mundo desde la cámara\n");
             camara_activa = 1;
+        }
+        else
+        {
+            printf("Viendo el mundo desde el objeto seleccionado\n");
+            camara_activa = 0;
+        }
         break;
     case 'f':
         /*Ask for file*/
         printf("idatzi fitxategi izena\n");
         scanf("%s", &(fitxiz[0]));
-        read_from_file(fitxiz);
+        read_from_file(fitxiz, LISTA_OBJETOS);
         indexx = 0;
         break;
         /* case 'S':  // save to file
@@ -800,16 +891,8 @@ static void teklatua(unsigned char key, int x, int y)
                           fclose(obj_file);
                           }
                  break; */
-    case 9:             /* <TAB> */
-        if (foptr != 0) // objekturik gabe ez du ezer egin behar
-                        // si no hay objeto no hace nada
-        {
-            sel_ptr = sel_ptr->hptr;
-            /*The selection is circular, thus if we move out of the list we go back to the first element*/
-            if (sel_ptr == 0)
-                sel_ptr = foptr;
-            indexx = 0; // the selected polygon is the first one
-        }
+    case 9: /* <TAB> */
+        siguiente_elemento_lista();
         break;
     case 27: // <ESC>
         exit(0);
@@ -854,15 +937,17 @@ int main(int argc, char **argv)
     sel_ptr = 0;
     aldaketa = 'r';
     ald_lokala = 1;
+    camara_ptr = 0;
+    obj_ptr = 0;
 
     // TODO: Temporal, cargar una camara como un objeto. Buscar otra manera mas simple
-    read_from_file("camara.txt");
-    camara_ptr = sel_ptr;
+    read_from_file("camara.txt", LISTA_CAMARAS);
+    camara_ptr = (*sel_ptr);
 
     if (argc > 1)
-        read_from_file(argv[1]);
+        read_from_file(argv[1], LISTA_OBJETOS);
     else
-        read_from_file("adibideak.txt");
+        read_from_file("adibideak.txt", LISTA_OBJETOS);
 
     glutMainLoop();
 
