@@ -59,6 +59,8 @@ int indexx;
 hiruki *triangulosptr;
 triobj *foptr;
 triobj *sel_ptr;
+triobj *camara_ptr; // Puntero a la camara activa
+int camara_activa;  // Si tenemos la camara activa o no
 int denak;
 int lineak;
 int objektuak;
@@ -170,6 +172,59 @@ void mxm(double mresptr[16], double mA[16], double mB[16])
     }
 }
 
+void aplicar_mcsr(double mresptr[16], double mCamara[16], double mObj[16])
+{
+    double mcsr[16];
+    int i;
+    for (i = 0; i < 16; i++)
+        mcsr[i] = 0;
+
+    /*
+        m[16] posiciones
+        [ 0  1  2  3  |
+        | 4  5  6  7  |
+        | 8  9  10 11 |
+        | 12 13 14 15 ]
+    */
+
+    /*
+        Mcsr =
+        [ Xc_x  Xc_y  Xc_z  (- Xc * Pc)  |
+        | Yc_x  Yc_y  Yc_z  (- Yc * Pc)  |
+        | Zc_x  Zc_y  Zc_z  (- Zc * Pc)  |
+        |   0     0     0          1     ]
+
+        Mcamara =
+        [ Xc_x  Yc_x  Zc_x  Pc_x  |
+        | Xc_y  Yc_y  Zc_y  Pc_y  |
+        | Xc_z  Yc_z  Zc_z  Pc_z  |
+        |   0     0     0    1    ]
+    */
+    // Columna Xc
+    mcsr[0] = mCamara[0];
+    mcsr[1] = mCamara[4];
+    mcsr[2] = mCamara[8];
+
+    // Columna Yc
+    mcsr[4] = mCamara[1];
+    mcsr[5] = mCamara[5];
+    mcsr[6] = mCamara[9];
+
+    // Columna Zc
+    mcsr[8] = mCamara[2];
+    mcsr[9] = mCamara[6];
+    mcsr[10] = mCamara[10];
+
+    // Columna -(X,Y,Z)c * Pc
+    mcsr[3] = -(mCamara[0] * mCamara[3] + mCamara[4] * mCamara[7] + mCamara[8] * mCamara[11]);   // -Xc * Pc
+    mcsr[7] = -(mCamara[1] * mCamara[3] + mCamara[5] * mCamara[7] + mCamara[9] * mCamara[11]);   // -Yc * Pc
+    mcsr[11] = -(mCamara[2] * mCamara[3] + mCamara[6] * mCamara[7] + mCamara[10] * mCamara[11]); // -Zc * Pc
+
+    mcsr[15] = 1;
+
+    mxm(mresptr, mcsr, mObj);
+}
+
 void dibujar_triangulo(triobj *optr, int i)
 {
     hiruki *tptr;
@@ -185,9 +240,25 @@ void dibujar_triangulo(triobj *optr, int i)
     if (i >= optr->num_triangles)
         return;
     tptr = optr->triptr + i;
-    mxp(&p1, optr->mptr->m, tptr->p1);
-    mxp(&p2, optr->mptr->m, tptr->p2);
-    mxp(&p3, optr->mptr->m, tptr->p3);
+
+    // Si tenemos camara multiplicar la 'Mcsr' a la matriz del objeto 'Mobj'
+    mlist *matriz_observador_ptr;
+    if (camara_ptr != 0 && camara_activa == 1)
+    {
+        mlist mcsr_objptr;
+        matriz_observador_ptr = &mcsr_objptr;
+        aplicar_mcsr(matriz_observador_ptr->m, camara_ptr->mptr->m, optr->mptr->m);
+    }
+    else
+    {
+        matriz_observador_ptr = optr->mptr;
+    }
+
+    // (Mcsr * Mobj) * Obj
+    mxp(&p1, matriz_observador_ptr->m, tptr->p1);
+    mxp(&p2, matriz_observador_ptr->m, tptr->p2);
+    mxp(&p3, matriz_observador_ptr->m, tptr->p3);
+
     if (lineak == 1)
     {
         glBegin(GL_POLYGON);
@@ -199,7 +270,7 @@ void dibujar_triangulo(triobj *optr, int i)
     }
     //  else
     // TODO
-    // hemen azpikoa kendu eta triangelua testurarekin marrazten duen kodea sartu.
+    // hemen azpikoa kendu eta triangelua testurarekin marrazten duen kodea sartu.0
     // lo que sigue aqui hay que sustituir por el código adecuado que dibuja el triangulo con textura
 
     // Calcular Psup, Pmed, Pinf
@@ -499,7 +570,8 @@ void rotacion(mlist *matriz_transformacion, int eje, int dir, double angulo)
 
 void escalado(mlist *matriz_transformacion, int dir, float proporcion)
 {
-    if(proporcion <= 0) return; // Directamente evitamos que se pueda pasar 0, evitando division /0
+    if (proporcion <= 0)
+        return; // Directamente evitamos que se pueda pasar 0, evitando division /0
 
     int i;
     for (i = 0; i < 16; i++)
@@ -516,12 +588,11 @@ void escalado(mlist *matriz_transformacion, int dir, float proporcion)
     }
     else // dir == DIR_ATRAS
     {
-        matriz_transformacion->m[0] = 1/proporcion;  // x
-        matriz_transformacion->m[5] = 1/proporcion;  // y
-        matriz_transformacion->m[10] = 1/proporcion; // z
+        matriz_transformacion->m[0] = 1 / proporcion;  // x
+        matriz_transformacion->m[5] = 1 / proporcion;  // y
+        matriz_transformacion->m[10] = 1 / proporcion; // z
         matriz_transformacion->m[15] = 1;
     }
-
 }
 
 void aplicar_transformacion(mlist *matriz_transformacionptr, int sistema_referencia)
@@ -556,7 +627,8 @@ void tratar_transformacion(int eje, int dir)
         rotacion(&matriz_transformacion, eje, dir, ANGULO_ROTACION);
         break;
     case ESCALADO:
-        if(eje != EJE_NULL) return;
+        if (eje != EJE_NULL)
+            return;
         escalado(&matriz_transformacion, dir, PROPORCION_ESCALADO);
         break;
     default:
@@ -692,6 +764,13 @@ static void teklatua(unsigned char key, int x, int y)
     case 'u':
         undo();
         break;
+    case 'j':
+        printf("Camara activa %d\n", camara_activa);
+        if (camara_activa == 1)
+            camara_activa = 0;
+        else
+            camara_activa = 1;
+        break;
     case 'f':
         /*Ask for file*/
         printf("idatzi fitxategi izena\n");
@@ -768,17 +847,23 @@ int main(int argc, char **argv)
     glClearColor(0.0f, 0.0f, 0.7f, 1.0f);
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     glEnable(GL_DEPTH_TEST); // activar el test de profundidad (Z-buffer)
-    denak = 0;
-    lineak = 0;
-    objektuak = 0;
+    denak = 1;
+    lineak = 1;
+    objektuak = 1;
     foptr = 0;
     sel_ptr = 0;
     aldaketa = 'r';
     ald_lokala = 1;
+
+    // TODO: Temporal, cargar una camara como un objeto. Buscar otra manera mas simple
+    read_from_file("camara.txt");
+    camara_ptr = sel_ptr;
+
     if (argc > 1)
         read_from_file(argv[1]);
     else
         read_from_file("adibideak.txt");
+
     glutMainLoop();
 
     return 0;
