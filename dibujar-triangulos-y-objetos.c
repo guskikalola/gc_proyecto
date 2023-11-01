@@ -18,6 +18,7 @@
 #define DESPLAZAMIENTO_TRANSLACION 5
 #define ANGULO_ROTACION 3.14159 / 90
 #define PROPORCION_ESCALADO 1.2
+#define DISTANCIA_MINIMA_ANALISIS 30
 
 #define TRANSLACION 't'
 #define ESCALADO 's'
@@ -37,6 +38,12 @@
 #define LISTA_OBJETOS 0
 #define LISTA_CAMARAS 1
 // #define LISTA_LUCES 2
+
+#define CAMARA_PERSPECTIVA 0
+#define CAMARA_PARALELA 1
+
+#define CAMARA_MOD_VUELO 0
+#define CAMARA_MOD_ANALISIS 1
 
 typedef struct mlist
 {
@@ -74,6 +81,8 @@ triobj **foptr;   // Puntero al puntero del primer objeto de la lista activa (in
 triobj **sel_ptr; // Puntero al puntero del objeto actualmente seleccionado (independiente de la lista)
 
 int camara_activa; // Si estamos viendo desde la camara o no ( en caso negativo vemos desde objeto )
+int tipo_camara;
+int modo_camara;
 int denak;
 int lineak;
 int objektuak;
@@ -140,46 +149,6 @@ void dibujar_linea(punto p1, punto p2)
         glEnd();
     }
 }
-
-// Teniendo el cuenta la lista activa cambia sel_ptr al siguiente elemento
-void siguiente_elemento_lista()
-{
-    if ((*foptr) != 0) // objekturik gabe ez du ezer egin behar
-                       // si no hay objeto no hace nada
-    {
-        (*sel_ptr) = (*sel_ptr)->hptr;
-        /*The selection is circular, thus if we move out of the list we go back to the first element*/
-        if ((*sel_ptr) == 0)
-            (*sel_ptr) = (*foptr);
-        indexx = 0; // the selected polygon is the first one
-    }
-}
-
-// Cambia cual es la lista activa, haciendo que sel_ptr apunte al elemento seleccionado de esa lista
-// Y foptr al primer elemento de esa lista
-void cambiar_lista_activa(int lista)
-{
-    char *nombre_lista;
-
-    switch (lista)
-    {
-    case LISTA_OBJETOS:
-        sel_ptr = &obj_ptr;
-        foptr = &objetosptr;
-        nombre_lista = "LISTA_OBJETOS";
-        break;
-    case LISTA_CAMARAS:
-        sel_ptr = &camara_ptr;
-        foptr = &camarasptr;
-        nombre_lista = "LISTA_CAMARAS";
-        break;
-    }
-
-    lista_activa = lista;
-
-    printf("Se ha cambiado la lista activa a: %s\n", nombre_lista);
-}
-
 void print_matrizea(char *str)
 {
     int i;
@@ -190,13 +159,18 @@ void print_matrizea(char *str)
                (*sel_ptr)->mptr->m[i * 4 + 3]);
 }
 
-// TODO
-// aurrerago egitekoa
-// para más adelante
+void print_matrizea2(char *str, mlist *matrizea)
+{
+    int i;
+
+    printf("%s\n", str);
+    for (i = 0; i < 4; i++)
+        printf("%lf, %lf, %lf, %lf\n", matrizea->m[i * 4], matrizea->m[i * 4 + 1], matrizea->m[i * 4 + 2],
+               matrizea->m[i * 4 + 3]);
+}
+
 void mxp(punto *pptr, double m[16], punto p)
 {
-    // print_matrizea("m:");
-
     pptr->x = m[0] * p.x + m[1] * p.y + m[2] * p.z + m[3];
     pptr->y = m[4] * p.x + m[5] * p.y + m[6] * p.z + m[7];
     pptr->z = m[8] * p.x + m[9] * p.y + m[10] * p.z + m[11];
@@ -277,6 +251,118 @@ void aplicar_mcsr(double mresptr[16], double mCamara[16], double mObj[16])
     mxm(mresptr, mcsr, mObj);
 }
 
+// TODO: si miras a un objeto en tu misma pos va a dar error, siendo los resultados nan
+// Arreglo temporal: Poner la identidad en los vectores
+void look_at(triobj *observadorptr, triobj *objetivoptr)
+{
+    int i;
+    mlist *nueva_matrizptr = (mlist *)malloc(sizeof(mlist));
+
+    for (i = 0; i < 16; i++)
+        nueva_matrizptr->m[i] = 0;
+
+    // Parametros: E, At, (Vp = (0,1,0))
+    double e[3] = {observadorptr->mptr->m[3], observadorptr->mptr->m[7], observadorptr->mptr->m[11]};
+    double at[3] = {objetivoptr->mptr->m[3], objetivoptr->mptr->m[7], objetivoptr->mptr->m[11]};
+    double vp[3] = {0, 1, 0};
+    // Buscamos: Zc, Xc, Yc
+    double z_c[3];
+    double x_c[3];
+    double y_c[3];
+
+    // Zc = (E - At) / || E - At ||
+    double e_at[3] = {e[0] - at[0], e[1] - at[1], e[2] - at[2]};
+    double mod_e_at = sqrt(pow(e_at[0], 2) + pow(e_at[1], 2) + pow(e_at[2], 2));
+    if (mod_e_at == 0)
+    {
+        z_c[0] = 0;
+        z_c[1] = 0;
+        z_c[2] = 1;
+    }
+    else
+    {
+        z_c[0] = e_at[0] / mod_e_at;
+        z_c[1] = e_at[1] / mod_e_at;
+        z_c[2] = e_at[2] / mod_e_at;
+    }
+
+    // Xc = (Vp /\ Zc) / ||(Vp /\ Zc)||
+    double vp_zc[3] = {vp[1] * z_c[2] - vp[2] * z_c[1], -(vp[0] * z_c[2] - vp[2] * z_c[0]), vp[0] * z_c[1] - vp[1] * z_c[0]};
+    double mod_vp_zc = sqrt(pow(vp_zc[0], 2) + pow(vp_zc[1], 2) + pow(vp_zc[2], 2));
+    if (mod_vp_zc == 0)
+    {
+        x_c[0] = 1;
+        x_c[1] = 0;
+        x_c[2] = 0;
+    }
+    else
+    {
+        x_c[0] = vp_zc[0] / mod_vp_zc;
+        x_c[1] = vp_zc[1] / mod_vp_zc;
+        x_c[2] = vp_zc[2] / mod_vp_zc;
+    }
+
+    // Yc = Zc /\ Xc
+    double zc_xc[3] = {z_c[1] * x_c[2] - z_c[2] * x_c[1], -(z_c[0] * x_c[2] - z_c[2] * x_c[0]), z_c[0] * x_c[1] - z_c[1] * x_c[0]};
+    y_c[0] = zc_xc[0];
+    y_c[1] = zc_xc[1];
+    y_c[2] = zc_xc[2];
+
+    // Ahora que tenemos Xc, Yc y Zc, construimos la nueva matriz de la camara
+    for (i = 0; i < 3; i++)
+        nueva_matrizptr->m[i * 4] = x_c[i];
+    for (i = 0; i < 3; i++)
+        nueva_matrizptr->m[(i * 4) + 1] = y_c[i];
+    for (i = 0; i < 3; i++)
+        nueva_matrizptr->m[(i * 4) + 2] = z_c[i];
+    for (i = 0; i < 3; i++)
+        nueva_matrizptr->m[(i * 4) + 3] = e[i];
+
+    nueva_matrizptr->m[15] = 1;
+
+    nueva_matrizptr->hptr = observadorptr->mptr;
+    observadorptr->mptr = nueva_matrizptr;
+}
+
+// Teniendo el cuenta la lista activa cambia sel_ptr al siguiente elemento
+void siguiente_elemento_lista()
+{
+    if ((*foptr) != 0) // objekturik gabe ez du ezer egin behar
+                       // si no hay objeto no hace nada
+    {
+        (*sel_ptr) = (*sel_ptr)->hptr;
+        /*The selection is circular, thus if we move out of the list we go back to the first element*/
+        if ((*sel_ptr) == 0)
+            (*sel_ptr) = (*foptr);
+        indexx = 0; // the selected polygon is the first one
+    }
+}
+
+// Cambia cual es la lista activa, haciendo que sel_ptr apunte al elemento seleccionado de esa lista
+// Y foptr al primer elemento de esa lista
+void cambiar_lista_activa(int lista)
+{
+    char *nombre_lista;
+
+    switch (lista)
+    {
+    case LISTA_OBJETOS:
+        sel_ptr = &obj_ptr;
+        foptr = &objetosptr;
+        nombre_lista = "LISTA_OBJETOS";
+        break;
+    case LISTA_CAMARAS:
+        sel_ptr = &camara_ptr;
+        foptr = &camarasptr;
+        nombre_lista = "LISTA_CAMARAS";
+        break;
+    }
+
+    lista_activa = lista;
+
+    printf("Se ha cambiado la lista activa a: %s\n", nombre_lista);
+}
+
 void dibujar_triangulo(triobj *optr, int i)
 {
     hiruki *tptr;
@@ -303,7 +389,9 @@ void dibujar_triangulo(triobj *optr, int i)
     }
     else
     {
-        matriz_observador_ptr = optr->mptr;
+        mlist mcsr_objptr;
+        matriz_observador_ptr = &mcsr_objptr;
+        aplicar_mcsr(matriz_observador_ptr->m, obj_ptr->mptr->m, optr->mptr->m);
     }
 
     // (Mcsr * Mobj) * Obj
@@ -321,9 +409,6 @@ void dibujar_triangulo(triobj *optr, int i)
         return;
     }
     //  else
-    // TODO
-    // hemen azpikoa kendu eta triangelua testurarekin marrazten duen kodea sartu.0
-    // lo que sigue aqui hay que sustituir por el código adecuado que dibuja el triangulo con textura
 
     // Calcular Psup, Pmed, Pinf
 
@@ -476,7 +561,8 @@ static void marraztu(void)
 
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    glOrtho(-500.0, 500.0, -500.0, 500.0, -500.0, 500.0);
+    // glOrtho(-500.0, 500.0, -500.0, 500.0, -500.0, 500.0);
+    glOrtho(-500.0, 500.0, -500.0, 500.0, 0.0, 500.0); // Para no dibujar lo que está detrás
 
     triangulosptr = (*sel_ptr)->triptr;
     if (objektuak == 1)
@@ -519,25 +605,12 @@ void read_from_file(char *fitx, int tipo_lista)
     int i, retval;
     triobj *optr;
 
-    // hiruki **listaptrptr;
-    // hiruki **ultimo_listaptrptr;
-
-    // switch (tipo_lista)
-    // {
-    // case LISTA_CAMARAS:
-    //     ultimo_listaptrptr = &camarasptr;
-    //     break;
-    // case LISTA_OBJETOS:
-    //     ultimo_listaptrptr = &objetosptr;
-    //     break;
-    // }
-
     cambiar_lista_activa(tipo_lista);
     // Se va a añadir el objeto nuevo a la lista que toca
     // Ademas se va a cambiar el objeto seleccionado al nuevo
     // haciendo que las transformaciones se apliquen sobre este.
-    // Esto no cambia que si estabas viendo desde la camara cambie
-    // a ver desde el objeto
+    // Esto no hace que si estabas viendo desde la camara cambie
+    // a ver desde el objeto o al reves.
 
     // printf("%s fitxategitik datuak hartzera\n",fitx);
     optr = (triobj *)malloc(sizeof(triobj));
@@ -648,6 +721,79 @@ void rotacion(mlist *matriz_transformacion, int eje, int dir, double angulo)
     matriz_transformacion->m[15] = 1;
 }
 
+// mlist *matriz_transformacion, int eje, int dir, double angulo
+void rotacion_respecto_punto(mlist *matriz_transformacion, triobj *pA, int eje, int dir, double angulo)
+{
+    int i;
+    float angulo_x_dir;
+    mlist m_translacion;
+    mlist m_deshacer_translacion;
+    mlist m_rotacion_eje;
+    mlist m_temp;
+    double eje_rotacion[3];
+
+    for (i = 0; i < 16; i++)
+    {
+        m_temp.m[i] = 0;
+        m_rotacion_eje.m[i] = 0;
+        matriz_transformacion->m[i] = 0;
+    }
+
+    if (dir == DIR_ADELANTE)
+        angulo_x_dir = angulo;
+    else // dir == DIR_ATRAS
+        angulo_x_dir = (2 * 3.14159) - angulo;
+
+    if (eje == EJE_X)
+    {
+        eje_rotacion[0] = (*sel_ptr)->mptr->m[0];
+        eje_rotacion[1] = (*sel_ptr)->mptr->m[4];
+        eje_rotacion[2] = (*sel_ptr)->mptr->m[8];
+    }
+    else if (eje == EJE_Y)
+    {
+        eje_rotacion[0] = (*sel_ptr)->mptr->m[1];
+        eje_rotacion[1] = (*sel_ptr)->mptr->m[5];
+        eje_rotacion[2] = (*sel_ptr)->mptr->m[9];
+    }
+    else // EJE_Z
+    {
+        eje_rotacion[0] = (*sel_ptr)->mptr->m[2];
+        eje_rotacion[1] = (*sel_ptr)->mptr->m[6];
+        eje_rotacion[2] = (*sel_ptr)->mptr->m[10];
+    }
+
+    translacion(&m_translacion, EJE_X, DIR_ADELANTE, 0);
+    translacion(&m_deshacer_translacion, EJE_X, DIR_ADELANTE, 0);
+
+    // Hacer que el objeto sea el origen
+    m_translacion.m[3] = -pA->mptr->m[3];   // x
+    m_translacion.m[7] = -pA->mptr->m[7];   // y
+    m_translacion.m[11] = -pA->mptr->m[11]; // z
+
+    // Deshacer la translacion
+    m_deshacer_translacion.m[3] = pA->mptr->m[3];   // x
+    m_deshacer_translacion.m[7] = pA->mptr->m[7];   // y
+    m_deshacer_translacion.m[11] = pA->mptr->m[11]; // z
+
+    // Rotar respecto a un punto ( siendo el punto el punto de atencion )
+    m_rotacion_eje.m[0] = cos(angulo_x_dir) + (1 - cos(angulo_x_dir)) * pow(eje_rotacion[0], 2);
+    m_rotacion_eje.m[1] = (1 - cos(angulo_x_dir)) * eje_rotacion[0] * eje_rotacion[1] - eje_rotacion[2] * sin(angulo_x_dir);
+    m_rotacion_eje.m[2] = (1 - cos(angulo_x_dir)) * eje_rotacion[0] * eje_rotacion[2] + eje_rotacion[1] * sin(angulo_x_dir);
+    m_rotacion_eje.m[4] = (1 - cos(angulo_x_dir)) * eje_rotacion[0] * eje_rotacion[1] + eje_rotacion[2] * sin(angulo_x_dir);
+    m_rotacion_eje.m[5] = cos(angulo_x_dir) + (1 - cos(angulo_x_dir)) * pow(eje_rotacion[1], 2);
+    m_rotacion_eje.m[6] = (1 - cos(angulo_x_dir)) * eje_rotacion[1] * eje_rotacion[2] - eje_rotacion[0] * sin(angulo_x_dir);
+    m_rotacion_eje.m[8] = (1 - cos(angulo_x_dir)) * eje_rotacion[0] * eje_rotacion[2] - eje_rotacion[1] * sin(angulo_x_dir);
+    m_rotacion_eje.m[9] = (1 - cos(angulo_x_dir)) * eje_rotacion[1] * eje_rotacion[2] + eje_rotacion[0] * sin(angulo_x_dir);
+    m_rotacion_eje.m[10] = cos(angulo_x_dir) + (1 - cos(angulo_x_dir)) * pow(eje_rotacion[2], 2);
+    m_rotacion_eje.m[15] = 1;
+
+    mxm(m_temp.m, m_rotacion_eje.m, m_translacion.m);
+    mxm(matriz_transformacion->m, m_deshacer_translacion.m, m_temp.m);
+
+    matriz_transformacion->m[15] = 1;
+}
+
 void escalado(mlist *matriz_transformacion, int dir, float proporcion)
 {
     if (proporcion <= 0)
@@ -694,9 +840,73 @@ void aplicar_transformacion(mlist *matriz_transformacionptr, int sistema_referen
     (*sel_ptr)->mptr = nueva_matrizptr;
 }
 
+// Hace que la camara no pueda estar a menos de X distancia del objetivo
+// ajustando la z para que sea asi
+void ajustar_distancia_analisis()
+{
+    mlist matriz_transformacion;
+    double distancia;
+    double pos_cam[3] = {camara_ptr->mptr->m[3], camara_ptr->mptr->m[7], camara_ptr->mptr->m[11]};
+    double pos_obj[3] = {obj_ptr->mptr->m[3], obj_ptr->mptr->m[7], obj_ptr->mptr->m[11]};
+
+    distancia = sqrt(pow(pos_obj[0] - pos_cam[0], 2) + pow(pos_obj[1] - pos_cam[1], 2) + pow(pos_obj[2] - pos_cam[2], 2));
+
+    if (distancia < DISTANCIA_MINIMA_ANALISIS)
+    {
+
+        translacion(&matriz_transformacion, EJE_Z, DIR_ADELANTE, (DISTANCIA_MINIMA_ANALISIS - distancia));
+        aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
+    }
+
+    // printf("DISTANCIA:%f\n", distancia);
+}
+
+void tratar_transformacion_modo_analisis(int eje, int dir)
+{
+    mlist matriz_transformacion;
+    int sistema_ref;
+    // Si estamos con camara_activa y en modo analisis
+    // solo disponemos de dos transformaciones ( y limitadas ):
+    // 1 . Rotacion :  Eje X y Eje Y
+    // 2 . Translacion : Eje Z
+
+    switch (aldaketa)
+    {
+    case TRANSLACION:
+        if (eje != EJE_Z)
+            return;
+
+        translacion(&matriz_transformacion, eje, dir, DESPLAZAMIENTO_TRANSLACION);
+        sistema_ref = SISTEMA_LOCAL;
+        break;
+    case ROTACION:
+        if (eje != EJE_X && eje != EJE_Y)
+            return;
+        rotacion_respecto_punto(&matriz_transformacion, obj_ptr, eje, dir, ANGULO_ROTACION);
+        sistema_ref = SISTEMA_MUNDO;
+        break;
+    default:
+        return;
+    }
+
+    aplicar_transformacion(&matriz_transformacion, sistema_ref);
+    // print_matrizea2("Mcam:\n", camara_ptr->mptr);
+    // print_matrizea2("Mobj:\n", obj_ptr->mptr);
+    ajustar_distancia_analisis();
+}
+
 void tratar_transformacion(int eje, int dir)
 {
     mlist matriz_transformacion;
+
+    // Si estamos con camara_activa y en modo analisis,
+    // vamos a separar la logica para las transformaciones en este caso
+
+    if (camara_activa == 1 && modo_camara == CAMARA_MOD_ANALISIS && lista_activa == LISTA_CAMARAS)
+    {
+        tratar_transformacion_modo_analisis(eje, dir);
+        return;
+    }
 
     switch (aldaketa)
     {
@@ -712,9 +922,15 @@ void tratar_transformacion(int eje, int dir)
         escalado(&matriz_transformacion, dir, PROPORCION_ESCALADO);
         break;
     default:
-        break;
+        return;
     }
-    aplicar_transformacion(&matriz_transformacion, ald_lokala);
+
+    // Las transformaciones a las camaras siempre se hacen en el sistema local,
+    // independientemente del sistema de referencia activo
+    if (lista_activa == LISTA_CAMARAS)
+        aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL); // La camara siempre en sis.local
+    else
+        aplicar_transformacion(&matriz_transformacion, ald_lokala);
 }
 
 void x_aldaketa(int dir)
@@ -812,16 +1028,38 @@ static void teklatua(unsigned char key, int x, int y)
         aldaketa = 's';
         tratar_transformacion(EJE_NULL, DIR_ATRAS);
         break;
+    case 'G':
     case 'g':
-        if (ald_lokala == 1)
-            ald_lokala = 0;
-        else
-            ald_lokala = 1;
+        if (lista_activa == LISTA_CAMARAS) // ANALISIS <-> VUELO
+        {
+            if (modo_camara == CAMARA_MOD_VUELO)
+                modo_camara = CAMARA_MOD_ANALISIS;
+            else
+                modo_camara = CAMARA_MOD_VUELO;
 
-        if (ald_lokala == SISTEMA_LOCAL)
-            printf("Cambiado a sistema local\n");
+            if (modo_camara == CAMARA_MOD_VUELO)
+                printf("Cambiado a modo vuelo\n");
+            else
+            {
+                look_at(camara_ptr, obj_ptr);
+                ajustar_distancia_analisis();
+                printf("Cambiado a modo analisis\n");
+            }
+        }
         else
-            printf("Cambiado al sistema del mundo\n");
+        { // S.REF.LOCAL <-> S.REF.MUNDO
+
+            if (ald_lokala == 1)
+                ald_lokala = 0;
+            else
+                ald_lokala = 1;
+
+            if (ald_lokala == SISTEMA_LOCAL)
+                printf("Cambiado a sistema local\n");
+            else
+                printf("Cambiado al sistema del mundo\n");
+        }
+
         break;
     case 'x':
         x_aldaketa(DIR_ADELANTE);
@@ -847,7 +1085,7 @@ static void teklatua(unsigned char key, int x, int y)
     case 'c':
         if (lista_activa == LISTA_CAMARAS)
             cambiar_lista_activa(LISTA_OBJETOS);
-        else
+        else if (camara_activa == 1)
             cambiar_lista_activa(LISTA_CAMARAS);
         break;
     case 'C':
@@ -860,7 +1098,14 @@ static void teklatua(unsigned char key, int x, int y)
         {
             printf("Viendo el mundo desde el objeto seleccionado\n");
             camara_activa = 0;
+            cambiar_lista_activa(LISTA_OBJETOS);
         }
+        break;
+    case 'p':
+        tipo_camara = CAMARA_PERSPECTIVA;
+        break;
+    case 'P':
+        tipo_camara = CAMARA_PARALELA;
         break;
     case 'f':
         /*Ask for file*/
@@ -908,6 +1153,7 @@ static void teklatua(unsigned char key, int x, int y)
 int main(int argc, char **argv)
 {
     int retval;
+    mlist matriz_transformacion;
 
     printf(" Triangeluak: barneko puntuak eta testura\n Triángulos con puntos internos y textura \n");
     printf("Press <ESC> to finish\n");
@@ -939,15 +1185,32 @@ int main(int argc, char **argv)
     ald_lokala = 1;
     camara_ptr = 0;
     obj_ptr = 0;
+    camara_activa = 1;
+    tipo_camara = CAMARA_PERSPECTIVA;
 
     // TODO: Temporal, cargar una camara como un objeto. Buscar otra manera mas simple
     read_from_file("camara.txt", LISTA_CAMARAS);
     camara_ptr = (*sel_ptr);
 
+    translacion(&matriz_transformacion, EJE_Z, DIR_ADELANTE, 100);
+    aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
+
     if (argc > 1)
         read_from_file(argv[1], LISTA_OBJETOS);
     else
-        read_from_file("adibideak.txt", LISTA_OBJETOS);
+    {
+        read_from_file("z.txt", LISTA_OBJETOS);
+        translacion(&matriz_transformacion, EJE_X, DIR_ATRAS, 240);
+        aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
+
+        read_from_file("z.txt", LISTA_OBJETOS);
+        translacion(&matriz_transformacion, EJE_Y, DIR_ATRAS, 20);
+        aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
+
+        read_from_file("logoehu_planoa.txt", LISTA_OBJETOS);
+        translacion(&matriz_transformacion, EJE_X, DIR_ADELANTE, 370);
+        aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
+    }
 
     glutMainLoop();
 
