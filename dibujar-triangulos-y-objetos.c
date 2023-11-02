@@ -67,7 +67,9 @@ unsigned char *bufferra;
 int dimx, dimy;
 
 int indexx;
-hiruki *triangulosptr; // Lista de objetos
+hiruki *triangulosptr;
+mlist *mcsr_ptr;
+mlist *mmodelview_ptr;
 
 triobj *objetosptr; // Lista de objetos ( Apunta al primer objeto )
 triobj *obj_ptr;    // Puntero al objeto seleccionado de la lista
@@ -198,12 +200,11 @@ void mxm(double mresptr[16], double mA[16], double mB[16])
     }
 }
 
-void aplicar_mcsr(double mresptr[16], double mCamara[16], double mObj[16])
+void calcular_mcsr(mlist *mresptr, double mCamara[16])
 {
-    double mcsr[16];
     int i;
     for (i = 0; i < 16; i++)
-        mcsr[i] = 0;
+        mresptr->m[i] = 0;
 
     /*
         m[16] posiciones
@@ -227,28 +228,34 @@ void aplicar_mcsr(double mresptr[16], double mCamara[16], double mObj[16])
         |   0     0     0    1    ]
     */
     // Columna Xc
-    mcsr[0] = mCamara[0];
-    mcsr[1] = mCamara[4];
-    mcsr[2] = mCamara[8];
+    mresptr->m[0] = mCamara[0];
+    mresptr->m[1] = mCamara[4];
+    mresptr->m[2] = mCamara[8];
 
     // Columna Yc
-    mcsr[4] = mCamara[1];
-    mcsr[5] = mCamara[5];
-    mcsr[6] = mCamara[9];
+    mresptr->m[4] = mCamara[1];
+    mresptr->m[5] = mCamara[5];
+    mresptr->m[6] = mCamara[9];
 
     // Columna Zc
-    mcsr[8] = mCamara[2];
-    mcsr[9] = mCamara[6];
-    mcsr[10] = mCamara[10];
+    mresptr->m[8] = mCamara[2];
+    mresptr->m[9] = mCamara[6];
+    mresptr->m[10] = mCamara[10];
 
     // Columna -(X,Y,Z)c * Pc
-    mcsr[3] = -(mCamara[0] * mCamara[3] + mCamara[4] * mCamara[7] + mCamara[8] * mCamara[11]);   // -Xc * Pc
-    mcsr[7] = -(mCamara[1] * mCamara[3] + mCamara[5] * mCamara[7] + mCamara[9] * mCamara[11]);   // -Yc * Pc
-    mcsr[11] = -(mCamara[2] * mCamara[3] + mCamara[6] * mCamara[7] + mCamara[10] * mCamara[11]); // -Zc * Pc
+    mresptr->m[3] = -(mCamara[0] * mCamara[3] + mCamara[4] * mCamara[7] + mCamara[8] * mCamara[11]);   // -Xc * Pc
+    mresptr->m[7] = -(mCamara[1] * mCamara[3] + mCamara[5] * mCamara[7] + mCamara[9] * mCamara[11]);   // -Yc * Pc
+    mresptr->m[11] = -(mCamara[2] * mCamara[3] + mCamara[6] * mCamara[7] + mCamara[10] * mCamara[11]); // -Zc * Pc
 
-    mcsr[15] = 1;
+    mresptr->m[15] = 1;
+}
 
-    mxm(mresptr, mcsr, mObj);
+void calcular_mmodelview(mlist *mresptr, double mcsr[16], double mobj[16])
+{
+    int i;
+    for (i = 0; i < 16; i++)
+        mresptr->m[i] = 0;
+    mxm(mresptr->m, mcsr, mobj);
 }
 
 // TODO: si miras a un objeto en tu misma pos va a dar error, siendo los resultados nan
@@ -272,7 +279,16 @@ void look_at(triobj *observadorptr, triobj *objetivoptr)
 
     // Zc = (E - At) / || E - At ||
     double e_at[3] = {e[0] - at[0], e[1] - at[1], e[2] - at[2]};
+    double at_e[3] = {at[0] - e[0], at[1] - e[1], at[2] - e[2]};
     double mod_e_at = sqrt(pow(e_at[0], 2) + pow(e_at[1], 2) + pow(e_at[2], 2));
+
+    // At - E
+    // E - At /= Vp
+    if (at_e[0] == vp[0] && at_e[1] == vp[1] && at_e[2] == vp[2])
+        printf("IGUALES   AT-E=VP\n");
+    if (e_at[0] == vp[0] && e_at[1] == vp[1] && e_at[2] == vp[2])
+        printf("IGUALES   E-AT=VP\n");
+
     if (mod_e_at == 0)
     {
         z_c[0] = 0;
@@ -363,6 +379,35 @@ void cambiar_lista_activa(int lista)
     printf("Se ha cambiado la lista activa a: %s\n", nombre_lista);
 }
 
+int es_visible(triobj *optr, int i)
+{
+    hiruki *tptr;
+    triobj *observadorptr;
+    mlist matriz_csr_objeto;
+    mlist matriz_observador;
+
+    if(camara_activa == 1)
+        observadorptr = camara_ptr;
+    else
+        observadorptr = obj_ptr;
+
+    if (i >= optr->num_triangles)
+        return 0;
+    tptr = optr->triptr + i;
+
+    calcular_mcsr(&matriz_csr_objeto, optr->mptr->m);
+    mxm(matriz_observador.m, matriz_csr_objeto.m, observadorptr->mptr->m);
+
+    double v[3] = {matriz_observador.m[3] - optr->mptr->m[3], matriz_observador.m[7] - optr->mptr->m[7], matriz_observador.m[11] - optr->mptr->m[11]}; // observador - punto
+
+    double v_n = v[0] * tptr->v_normal.x + v[1] * tptr->v_normal.y + v[2] * tptr->v_normal.z; // v * n
+
+    // if (v * n > 0) dibujar
+    // else no dibujar
+
+    return v_n > 0;
+}
+
 void dibujar_triangulo(triobj *optr, int i)
 {
     hiruki *tptr;
@@ -379,25 +424,13 @@ void dibujar_triangulo(triobj *optr, int i)
         return;
     tptr = optr->triptr + i;
 
-    // Si tenemos camara multiplicar la 'Mcsr' a la matriz del objeto 'Mobj'
-    mlist *matriz_observador_ptr;
-    if (camara_ptr != 0 && camara_activa == 1)
-    {
-        mlist mcsr_objptr;
-        matriz_observador_ptr = &mcsr_objptr;
-        aplicar_mcsr(matriz_observador_ptr->m, camara_ptr->mptr->m, optr->mptr->m);
-    }
-    else
-    {
-        mlist mcsr_objptr;
-        matriz_observador_ptr = &mcsr_objptr;
-        aplicar_mcsr(matriz_observador_ptr->m, obj_ptr->mptr->m, optr->mptr->m);
-    }
+    if (es_visible(optr, i) != 1)
+        return;
 
     // (Mcsr * Mobj) * Obj
-    mxp(&p1, matriz_observador_ptr->m, tptr->p1);
-    mxp(&p2, matriz_observador_ptr->m, tptr->p2);
-    mxp(&p3, matriz_observador_ptr->m, tptr->p3);
+    mxp(&p1, mmodelview_ptr->m, tptr->p1);
+    mxp(&p2, mmodelview_ptr->m, tptr->p2);
+    mxp(&p3, mmodelview_ptr->m, tptr->p3);
 
     if (lineak == 1)
     {
@@ -539,6 +572,8 @@ static void marraztu(void)
 {
     float u, v;
     int i, j;
+    mlist mcsr;
+    mlist mmodelview;
     triobj *auxptr;
     /*
     unsigned char* colorv;
@@ -564,6 +599,19 @@ static void marraztu(void)
     // glOrtho(-500.0, 500.0, -500.0, 500.0, -500.0, 500.0);
     glOrtho(-500.0, 500.0, -500.0, 500.0, 0.0, 500.0); // Para no dibujar lo que está detrás
 
+    mcsr_ptr = &mcsr;
+    mmodelview_ptr = &mmodelview;
+
+    // Si tenemos camara multiplicar la 'Mcsr' a la matriz del objeto 'Mobj'
+    if (camara_ptr != 0 && camara_activa == 1)
+    {
+        calcular_mcsr(mcsr_ptr, camara_ptr->mptr->m);
+    }
+    else
+    {
+        calcular_mcsr(mcsr_ptr, obj_ptr->mptr->m);
+    }
+
     triangulosptr = (*sel_ptr)->triptr;
     if (objektuak == 1)
     {
@@ -571,6 +619,7 @@ static void marraztu(void)
         {
             for (auxptr = objetosptr; auxptr != 0; auxptr = auxptr->hptr)
             {
+                calcular_mmodelview(mmodelview_ptr, mcsr_ptr->m, auxptr->mptr->m);
                 for (i = 0; i < auxptr->num_triangles; i++)
                 {
                     dibujar_triangulo(auxptr, i);
@@ -579,6 +628,7 @@ static void marraztu(void)
 
             for (auxptr = camarasptr; auxptr != 0; auxptr = auxptr->hptr)
             {
+                calcular_mmodelview(mmodelview_ptr, mcsr_ptr->m, auxptr->mptr->m);
                 for (i = 0; i < auxptr->num_triangles; i++)
                 {
                     dibujar_triangulo(auxptr, i);
@@ -731,6 +781,7 @@ void rotacion_respecto_punto(mlist *matriz_transformacion, triobj *pA, int eje, 
     mlist m_rotacion_eje;
     mlist m_temp;
     double eje_rotacion[3];
+    double cos_angulo, sin_angulo;
 
     for (i = 0; i < 16; i++)
     {
@@ -777,15 +828,18 @@ void rotacion_respecto_punto(mlist *matriz_transformacion, triobj *pA, int eje, 
     m_deshacer_translacion.m[11] = pA->mptr->m[11]; // z
 
     // Rotar respecto a un punto ( siendo el punto el punto de atencion )
-    m_rotacion_eje.m[0] = cos(angulo_x_dir) + (1 - cos(angulo_x_dir)) * pow(eje_rotacion[0], 2);
-    m_rotacion_eje.m[1] = (1 - cos(angulo_x_dir)) * eje_rotacion[0] * eje_rotacion[1] - eje_rotacion[2] * sin(angulo_x_dir);
-    m_rotacion_eje.m[2] = (1 - cos(angulo_x_dir)) * eje_rotacion[0] * eje_rotacion[2] + eje_rotacion[1] * sin(angulo_x_dir);
-    m_rotacion_eje.m[4] = (1 - cos(angulo_x_dir)) * eje_rotacion[0] * eje_rotacion[1] + eje_rotacion[2] * sin(angulo_x_dir);
-    m_rotacion_eje.m[5] = cos(angulo_x_dir) + (1 - cos(angulo_x_dir)) * pow(eje_rotacion[1], 2);
-    m_rotacion_eje.m[6] = (1 - cos(angulo_x_dir)) * eje_rotacion[1] * eje_rotacion[2] - eje_rotacion[0] * sin(angulo_x_dir);
-    m_rotacion_eje.m[8] = (1 - cos(angulo_x_dir)) * eje_rotacion[0] * eje_rotacion[2] - eje_rotacion[1] * sin(angulo_x_dir);
-    m_rotacion_eje.m[9] = (1 - cos(angulo_x_dir)) * eje_rotacion[1] * eje_rotacion[2] + eje_rotacion[0] * sin(angulo_x_dir);
-    m_rotacion_eje.m[10] = cos(angulo_x_dir) + (1 - cos(angulo_x_dir)) * pow(eje_rotacion[2], 2);
+    cos_angulo = cos(angulo_x_dir);
+    sin_angulo = sin(angulo_x_dir);
+
+    m_rotacion_eje.m[0] = cos_angulo + (1 - cos_angulo) * pow(eje_rotacion[0], 2);
+    m_rotacion_eje.m[1] = (1 - cos_angulo) * eje_rotacion[0] * eje_rotacion[1] - eje_rotacion[2] * sin_angulo;
+    m_rotacion_eje.m[2] = (1 - cos_angulo) * eje_rotacion[0] * eje_rotacion[2] + eje_rotacion[1] * sin_angulo;
+    m_rotacion_eje.m[4] = (1 - cos_angulo) * eje_rotacion[0] * eje_rotacion[1] + eje_rotacion[2] * sin_angulo;
+    m_rotacion_eje.m[5] = cos_angulo + (1 - cos_angulo) * pow(eje_rotacion[1], 2);
+    m_rotacion_eje.m[6] = (1 - cos_angulo) * eje_rotacion[1] * eje_rotacion[2] - eje_rotacion[0] * sin_angulo;
+    m_rotacion_eje.m[8] = (1 - cos_angulo) * eje_rotacion[0] * eje_rotacion[2] - eje_rotacion[1] * sin_angulo;
+    m_rotacion_eje.m[9] = (1 - cos_angulo) * eje_rotacion[1] * eje_rotacion[2] + eje_rotacion[0] * sin_angulo;
+    m_rotacion_eje.m[10] = cos_angulo + (1 - cos_angulo) * pow(eje_rotacion[2], 2);
     m_rotacion_eje.m[15] = 1;
 
     mxm(m_temp.m, m_rotacion_eje.m, m_translacion.m);

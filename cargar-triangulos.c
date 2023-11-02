@@ -15,6 +15,18 @@ punto p1,p2,p3;
 */
 #include "cargar-triangulo.h"
 
+void calcular_vnormal(hiruki *trianguloptr)
+{
+	// p1p2 /\ p1p3 = normal 
+	double p1p2[3] = {trianguloptr->p2.x - trianguloptr->p1.x,trianguloptr->p2.y - trianguloptr->p1.y,trianguloptr->p2.z - trianguloptr->p1.z}; // p2 - p1
+	double p1p3[3] = {trianguloptr->p3.x - trianguloptr->p1.x,trianguloptr->p3.y - trianguloptr->p1.y,trianguloptr->p3.z - trianguloptr->p1.z};; // p3 - p1 
+    double p1p2_p1p3[3] = {p1p2[1] * p1p3[2] - p1p2[2] * p1p3[1], -(p1p2[0] * p1p3[2] - p1p2[2] * p1p3[0]), p1p2[0] * p1p3[1] - p1p2[1] * p1p3[0]};
+
+	trianguloptr->v_normal.x = p1p2_p1p3[0];
+	trianguloptr->v_normal.y = p1p2_p1p3[1];
+	trianguloptr->v_normal.z = p1p2_p1p3[2];
+}
+
 int cargar_triangulos(char *fitxiz, int *hkopptr, hiruki **hptrptr)
 {
  FILE *obj_file;
@@ -51,7 +63,8 @@ int cargar_triangulos(char *fitxiz, int *hkopptr, hiruki **hptrptr)
 		                                                   &((*hptrptr)[i].p2.u),&((*hptrptr)[i].p2.v),
 		                                                   &((*hptrptr)[i].p3.x),&((*hptrptr)[i].p3.y),&((*hptrptr)[i].p3.z),
 		                                                   &((*hptrptr)[i].p3.u),&((*hptrptr)[i].p3.v));
-                i++;
+		calcular_vnormal(&((*hptrptr)[i]));
+        i++;
 		}
 	}
  fclose(obj_file);
