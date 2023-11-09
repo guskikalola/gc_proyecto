@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <malloc.h>
+#include <math.h>
 #define MAXLINE 200
 
 /*
@@ -22,9 +23,12 @@ void calcular_vnormal(hiruki *trianguloptr)
 	double p1p3[3] = {trianguloptr->p3.x - trianguloptr->p1.x,trianguloptr->p3.y - trianguloptr->p1.y,trianguloptr->p3.z - trianguloptr->p1.z};; // p3 - p1 
     double p1p2_p1p3[3] = {p1p2[1] * p1p3[2] - p1p2[2] * p1p3[1], -(p1p2[0] * p1p3[2] - p1p2[2] * p1p3[0]), p1p2[0] * p1p3[1] - p1p2[1] * p1p3[0]};
 
-	trianguloptr->v_normal.x = p1p2_p1p3[0];
-	trianguloptr->v_normal.y = p1p2_p1p3[1];
-	trianguloptr->v_normal.z = p1p2_p1p3[2];
+    // double mod_vp_zc = sqrt(pow(vp_zc[0], 2) + pow(vp_zc[1], 2) + pow(vp_zc[2], 2));
+    double mod_p1p2_p1p3 = sqrt(pow(p1p2_p1p3[0], 2) + pow(p1p2_p1p3[1], 2) + pow(p1p2_p1p3[2], 2));
+
+	trianguloptr->v_normal.x = p1p2_p1p3[0] / mod_p1p2_p1p3;
+	trianguloptr->v_normal.y = p1p2_p1p3[1] / mod_p1p2_p1p3;
+	trianguloptr->v_normal.z = p1p2_p1p3[2] / mod_p1p2_p1p3;
 }
 
 int cargar_triangulos(char *fitxiz, int *hkopptr, hiruki **hptrptr)

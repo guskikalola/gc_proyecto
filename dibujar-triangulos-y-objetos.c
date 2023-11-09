@@ -20,6 +20,13 @@
 #define PROPORCION_ESCALADO 1.2
 #define DISTANCIA_MINIMA_ANALISIS 30
 
+#define CAMARA_CONFIG_NEAR -5.0
+#define CAMARA_CONFIG_FAR 500.0
+#define CAMARA_CONFIG_LEFT -5.0
+#define CAMARA_CONFIG_RIGHT 5.0
+#define CAMARA_CONFIG_TOP 5.0
+#define CAMARA_CONFIG_BOTTOM -5.0
+
 #define TRANSLACION 't'
 #define ESCALADO 's'
 #define ROTACION 'r'
@@ -93,6 +100,10 @@ int ald_lokala;
 
 char fitxiz[100];
 
+int ultimo_es_visible;
+int dibujar_no_visible;
+int dibujar_normales;
+
 // TODO
 // funtzio honek u eta v koordenatuei dagokien pointerra itzuli behar du.
 // debe devolver el pointer correspondiente a las coordenadas u y v
@@ -142,10 +153,19 @@ void dibujar_linea(punto p1, punto p2)
         pcalculado.v = j * pcortemayor->v + (1 - j) * pcortemenor->v;
 
         glBegin(GL_POINTS);
-        colorv = color_textura(pcalculado.u, pcalculado.v);
-        r = colorv[0];
-        g = colorv[1];
-        b = colorv[2];
+        if (ultimo_es_visible == 1)
+        {
+            colorv = color_textura(pcalculado.u, pcalculado.v);
+            r = colorv[0];
+            g = colorv[1];
+            b = colorv[2];
+        }
+        else
+        {
+            r = 255;
+            g = 0;
+            b = 0;
+        }
         glColor3ub(r, g, b);
         glVertex3f(pcalculado.x, pcalculado.y, pcalculado.z);
         glEnd();
@@ -178,6 +198,13 @@ void mxp(punto *pptr, double m[16], punto p)
     pptr->z = m[8] * p.x + m[9] * p.y + m[10] * p.z + m[11];
     pptr->u = p.u;
     pptr->v = p.v;
+}
+
+void mxv(vector *vptr, double m[16], vector v)
+{
+    vptr->x = m[0] * v.x + m[1] * v.y + m[2] * v.z + m[3];
+    vptr->y = m[4] * v.x + m[5] * v.y + m[6] * v.z + m[7];
+    vptr->z = m[8] * v.x + m[9] * v.y + m[10] * v.z + m[11];
 }
 
 void mxm(double mresptr[16], double mA[16], double mB[16])
@@ -256,6 +283,70 @@ void calcular_mmodelview(mlist *mresptr, double mcsr[16], double mobj[16])
     for (i = 0; i < 16; i++)
         mresptr->m[i] = 0;
     mxm(mresptr->m, mcsr, mobj);
+}
+
+void calcular_mperspectiva(mlist *mresptr, float n, float f, float r, float l, float t, float b)
+{
+    int i;
+    float r_menos_l, t_menos_b, f_menos_n;
+
+    for (i = 0; i < 16; i++)
+        mresptr->m[i] = 0;
+
+    r_menos_l = r - l;
+    t_menos_b = t - b;
+    f_menos_n = f - n;
+
+    if (r_menos_l == 0)
+        return;
+    if (t_menos_b == 0)
+        return;
+    if (f_menos_n == 0)
+        return;
+
+    mresptr->m[0] = (2 * n) / r_menos_l;
+    mresptr->m[2] = (r + l) / r_menos_l;
+    mresptr->m[5] = (2 * n) / t_menos_b;
+    mresptr->m[6] = (t + b) / t_menos_b;
+    mresptr->m[10] = (-f + n) / f_menos_n;
+    mresptr->m[11] = (-2 * f * n) / f_menos_n;
+    mresptr->m[14] = -1;
+}
+
+void aplicar_mperspectiva(punto *pptr, double m[16])
+{
+
+    punto ptemp;
+    float w;
+
+    /*
+        m[16] posiciones
+        [ 0  1  2  3  |
+        | 4  5  6  7  |
+        | 8  9  10 11 |
+        | 12 13 14 15 ]
+    */
+
+    ptemp.x = m[0] * pptr->x + m[1] * pptr->y + m[2] * pptr->z + m[3];
+    ptemp.y = m[4] * pptr->x + m[5] * pptr->y + m[6] * pptr->z + m[7];
+    ptemp.z = m[8] * pptr->x + m[9] * pptr->y + m[10] * pptr->z + m[11];
+    w = m[12] * pptr->x + m[13] * pptr->y + m[14] * pptr->z + m[15];
+    ptemp.u = pptr->u;
+    ptemp.v = pptr->v;
+
+    if (w == 0)
+        return;
+
+    // printf(" 1 ptemp.x %f\n", ptemp.x);
+    // printf(" 1 pptr->x %f\n", pptr->x);
+    // printf(" 1 w %f\n", w);
+
+    pptr->x = (ptemp.x / w) * 500;
+    pptr->y = (ptemp.y / w) * 500;
+    pptr->z = -(ptemp.z / w);
+    pptr->u = ptemp.u;
+    pptr->v = ptemp.v;
+    // printf(" 2 pptr->x %f\n", pptr->x);
 }
 
 // TODO: si miras a un objeto en tu misma pos va a dar error, siendo los resultados nan
@@ -386,7 +477,7 @@ int es_visible(triobj *optr, int i)
     mlist matriz_csr_objeto;
     mlist matriz_observador;
 
-    if(camara_activa == 1)
+    if (camara_activa == 1)
         observadorptr = camara_ptr;
     else
         observadorptr = obj_ptr;
@@ -398,14 +489,39 @@ int es_visible(triobj *optr, int i)
     calcular_mcsr(&matriz_csr_objeto, optr->mptr->m);
     mxm(matriz_observador.m, matriz_csr_objeto.m, observadorptr->mptr->m);
 
-    double v[3] = {matriz_observador.m[3] - optr->mptr->m[3], matriz_observador.m[7] - optr->mptr->m[7], matriz_observador.m[11] - optr->mptr->m[11]}; // observador - punto
-
-    double v_n = v[0] * tptr->v_normal.x + v[1] * tptr->v_normal.y + v[2] * tptr->v_normal.z; // v * n
+    //    double v[3] = {matriz_observador.m[3] - optr->mptr->m[3], matriz_observador.m[7] - optr->mptr->m[7], matriz_observador.m[11] - optr->mptr->m[11]}; // observador - punto
 
     // if (v * n > 0) dibujar
     // else no dibujar
 
-    return v_n > 0;
+    // TODO: MIRAR BIEN COMO CALCULAR VISIBILIDAD EN DIFERENTES TIPOS DE CAMARA
+    // Y MIRAR SI EL VNORMAL ESTA BIEN CALCULADO Y MIRAR TAMBIEN SI LOS TRIANGULOS DE LA CAMARA ESTAN EN EL SENTIDO CORRECTO
+
+    if (tipo_camara == CAMARA_PERSPECTIVA)
+    {
+        double v[3] = {matriz_observador.m[3] - optr->mptr->m[3], matriz_observador.m[7] - optr->mptr->m[7], matriz_observador.m[11] - optr->mptr->m[11]}; // observador - punto
+        double v_n = v[0] * tptr->v_normal.x + v[1] * tptr->v_normal.y + v[2] * tptr->v_normal.z;                                                          // v * n
+        return v_n > 0;
+    }
+    else // CAMARA_PARALELA
+    {
+        // punto normal_srmundo;
+        // punto normal_srobservador;
+        // mlist matriz_csr_observador;
+        // normal_srmundo.x = optr->mptr->m[0] * tptr->v_normal.x + optr->mptr->m[1] * tptr->v_normal.y + optr->mptr->m[2] * tptr->v_normal.z + optr->mptr->m[3];
+        // normal_srmundo.y = optr->mptr->m[4] * tptr->v_normal.x + optr->mptr->m[5] * tptr->v_normal.y + optr->mptr->m[6] * tptr->v_normal.z + optr->mptr->m[7];
+        // normal_srmundo.z = optr->mptr->m[8] * tptr->v_normal.x + optr->mptr->m[9] * tptr->v_normal.y + optr->mptr->m[10] * tptr->v_normal.z + optr->mptr->m[11];
+        // normal_srmundo.u = 0;
+        // normal_srmundo.v = 0;
+
+        // calcular_mcsr(&matriz_csr_observador, observadorptr->mptr->m);
+
+        // mxp(&normal_srobservador, matriz_csr_observador.m, normal_srmundo);
+        double v[3] = {0, 0, matriz_observador.m[11] - optr->mptr->m[11]}; // observador - punto
+        // double v_n = v[0] * tptr->v_normal.x + v[1] * tptr->v_normal.y + v[2] * tptr->v_normal.z; // v * n
+        double v_n = matriz_observador.m[2] * tptr->v_normal.x + matriz_observador.m[6] * tptr->v_normal.y + matriz_observador.m[10] * tptr->v_normal.z; // v * n
+        return v_n > 0;
+    }
 }
 
 void dibujar_triangulo(triobj *optr, int i)
@@ -414,17 +530,23 @@ void dibujar_triangulo(triobj *optr, int i)
 
     punto *pgoiptr, *pbeheptr, *perdiptr;
     punto p1, p2, p3;
+    punto p2_vnormal;
+    punto p2_vnormal_transformado;
 
     float t, s;
     float cambiot, cambios;
 
     punto pcorte1, pcorte2;
 
+    mlist mperspectiva;
+
     if (i >= optr->num_triangles)
         return;
     tptr = optr->triptr + i;
 
-    if (es_visible(optr, i) != 1)
+    ultimo_es_visible = es_visible(optr, i);
+
+    if (ultimo_es_visible != 1 && dibujar_no_visible != 1)
         return;
 
     // (Mcsr * Mobj) * Obj
@@ -432,13 +554,55 @@ void dibujar_triangulo(triobj *optr, int i)
     mxp(&p2, mmodelview_ptr->m, tptr->p2);
     mxp(&p3, mmodelview_ptr->m, tptr->p3);
 
+    // Si la camara esta en perspectiva, aplicar (Mp * Mcsr * Mobj * Obj)
+    if (tipo_camara == CAMARA_PERSPECTIVA)
+    {
+        // TODO : Calcular mperspectiva al inicio del codigo y reusar puntero
+        calcular_mperspectiva(&mperspectiva, CAMARA_CONFIG_NEAR, CAMARA_CONFIG_FAR, CAMARA_CONFIG_RIGHT, CAMARA_CONFIG_LEFT, CAMARA_CONFIG_TOP, CAMARA_CONFIG_BOTTOM);
+        aplicar_mperspectiva(&p1, mperspectiva.m);
+        aplicar_mperspectiva(&p2, mperspectiva.m);
+        aplicar_mperspectiva(&p3, mperspectiva.m);
+    }
+
     if (lineak == 1)
     {
         glBegin(GL_POLYGON);
+
+        if (ultimo_es_visible != 1)
+            glColor3ub(255, 0, 0);
+        else
+            glColor3ub(255, 255, 255);
+
         glVertex3d(p1.x, p1.y, p1.z);
         glVertex3d(p2.x, p2.y, p2.z);
         glVertex3d(p3.x, p3.y, p3.z);
+
         glEnd();
+
+        if (dibujar_normales == 1)
+        {
+            glBegin(GL_LINES);
+
+            p2_vnormal.x = tptr->p1.x + tptr->v_normal.x * 40;
+            p2_vnormal.y = tptr->p1.y + tptr->v_normal.y * 40;
+            p2_vnormal.z = tptr->p1.z + tptr->v_normal.z * 40;
+            p2_vnormal.u = 0;
+            p2_vnormal.v = 0;
+
+            printf("v_normal(%f,%f,%f)\n", tptr->v_normal.x, tptr->v_normal.y, tptr->v_normal.z);
+
+            mxp(&p2_vnormal_transformado, mmodelview_ptr->m, p2_vnormal);
+            if (tipo_camara == CAMARA_PERSPECTIVA)
+            {
+                aplicar_mperspectiva(&p2_vnormal_transformado, mperspectiva.m);
+            }
+
+            glVertex3d(p1.x, p1.y, p1.z);
+            glVertex3d(p2_vnormal_transformado.x, p2_vnormal_transformado.y, p2_vnormal_transformado.z);
+
+            glEnd();
+        }
+
         return;
     }
     //  else
@@ -574,6 +738,8 @@ static void marraztu(void)
     int i, j;
     mlist mcsr;
     mlist mmodelview;
+    mlist mperspectiva;
+    mlist mtemp;
     triobj *auxptr;
     /*
     unsigned char* colorv;
@@ -597,7 +763,9 @@ static void marraztu(void)
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     // glOrtho(-500.0, 500.0, -500.0, 500.0, -500.0, 500.0);
-    glOrtho(-500.0, 500.0, -500.0, 500.0, 0.0, 500.0); // Para no dibujar lo que está detrás
+    // glOrtho(-500.0, 500.0, -500.0, 500.0, 0.0, 500.0); // Para no dibujar lo que está detrás
+    // glOrtho(CAMARA_CONFIG_LEFT, CAMARA_CONFIG_RIGHT, CAMARA_CONFIG_BOTTOM, CAMARA_CONFIG_TOP, CAMARA_CONFIG_NEAR, CAMARA_CONFIG_FAR); // Para no dibujar lo que está detrás
+    glOrtho(-500.0, 500.0, -500.0, 500.0, -500.0, 500.0);
 
     mcsr_ptr = &mcsr;
     mmodelview_ptr = &mmodelview;
@@ -619,6 +787,18 @@ static void marraztu(void)
         {
             for (auxptr = objetosptr; auxptr != 0; auxptr = auxptr->hptr)
             {
+                /*
+                if (tipo_camara == CAMARA_PERSPECTIVA)
+                {
+                    calcular_mperspectiva(&mperspectiva, CAMARA_CONFIG_NEAR, CAMARA_CONFIG_FAR, CAMARA_CONFIG_RIGHT, CAMARA_CONFIG_LEFT, CAMARA_CONFIG_TOP, CAMARA_CONFIG_BOTTOM);
+                    calcular_mmodelview(&mtemp, mcsr_ptr->m, auxptr->mptr->m);
+                    mxm(mmodelview_ptr->m, mperspectiva.m, mtemp.m);
+
+                    // PENDIENTE CALCULAR BIEN ESTA PARTE
+                    // FALTA HACER (x/w, y/w, -(z/w), 1)
+                }
+                else
+                */
                 calcular_mmodelview(mmodelview_ptr, mcsr_ptr->m, auxptr->mptr->m);
                 for (i = 0; i < auxptr->num_triangles; i++)
                 {
@@ -628,6 +808,18 @@ static void marraztu(void)
 
             for (auxptr = camarasptr; auxptr != 0; auxptr = auxptr->hptr)
             {
+                /*
+                if (tipo_camara == CAMARA_PERSPECTIVA)
+                {
+                    calcular_mperspectiva(&mperspectiva, CAMARA_CONFIG_NEAR, CAMARA_CONFIG_FAR, CAMARA_CONFIG_RIGHT, CAMARA_CONFIG_LEFT, CAMARA_CONFIG_TOP, CAMARA_CONFIG_BOTTOM);
+                    calcular_mmodelview(&mtemp, mcsr_ptr->m, auxptr->mptr->m);
+                    mxm(mmodelview_ptr->m, mperspectiva.m, mtemp.m);
+
+                    // PENDIENTE CALCULAR BIEN ESTA PARTE
+                    // FALTA HACER (x/w, y/w, -(z/w), 1)
+                }
+                else
+                */
                 calcular_mmodelview(mmodelview_ptr, mcsr_ptr->m, auxptr->mptr->m);
                 for (i = 0; i < auxptr->num_triangles; i++)
                 {
@@ -637,6 +829,7 @@ static void marraztu(void)
         }
         else
         {
+            calcular_mmodelview(mmodelview_ptr, mcsr_ptr->m, (*sel_ptr)->mptr->m);
             for (i = 0; i < (*sel_ptr)->num_triangles; i++)
             {
                 dibujar_triangulo((*sel_ptr), i);
@@ -771,7 +964,6 @@ void rotacion(mlist *matriz_transformacion, int eje, int dir, double angulo)
     matriz_transformacion->m[15] = 1;
 }
 
-// mlist *matriz_transformacion, int eje, int dir, double angulo
 void rotacion_respecto_punto(mlist *matriz_transformacion, triobj *pA, int eje, int dir, double angulo)
 {
     int i;
@@ -1138,7 +1330,13 @@ static void teklatua(unsigned char key, int x, int y)
         break;
     case 'c':
         if (lista_activa == LISTA_CAMARAS)
+        {
             cambiar_lista_activa(LISTA_OBJETOS);
+            if (modo_camara == CAMARA_MOD_ANALISIS)
+            {
+                modo_camara = CAMARA_MOD_VUELO;
+            }
+        }
         else if (camara_activa == 1)
             cambiar_lista_activa(LISTA_CAMARAS);
         break;
@@ -1155,11 +1353,30 @@ static void teklatua(unsigned char key, int x, int y)
             cambiar_lista_activa(LISTA_OBJETOS);
         }
         break;
-    case 'p':
-        tipo_camara = CAMARA_PERSPECTIVA;
-        break;
     case 'P':
-        tipo_camara = CAMARA_PARALELA;
+    case 'p':
+        if (tipo_camara == CAMARA_PARALELA)
+        {
+            printf("Modo camara: CAMARA_PERSPECTIVA\n");
+            tipo_camara = CAMARA_PERSPECTIVA;
+        }
+        else
+        {
+            printf("Modo camara: CAMARA_PARALELA\n");
+            tipo_camara = CAMARA_PARALELA;
+        }
+        break;
+    case 'b':
+        if (dibujar_no_visible == 1)
+            dibujar_no_visible = 0;
+        else
+            dibujar_no_visible = 1;
+        break;
+    case 'n':
+        if (dibujar_normales == 1)
+            dibujar_normales = 0;
+        else
+            dibujar_normales = 1;
         break;
     case 'f':
         /*Ask for file*/
@@ -1241,12 +1458,15 @@ int main(int argc, char **argv)
     obj_ptr = 0;
     camara_activa = 1;
     tipo_camara = CAMARA_PERSPECTIVA;
+    ultimo_es_visible = 0;
+    dibujar_no_visible = 1;
+    dibujar_normales = 1;
 
     // TODO: Temporal, cargar una camara como un objeto. Buscar otra manera mas simple
     read_from_file("camara.txt", LISTA_CAMARAS);
     camara_ptr = (*sel_ptr);
 
-    translacion(&matriz_transformacion, EJE_Z, DIR_ADELANTE, 100);
+    translacion(&matriz_transformacion, EJE_Z, DIR_ADELANTE, 300);
     aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
 
     if (argc > 1)
