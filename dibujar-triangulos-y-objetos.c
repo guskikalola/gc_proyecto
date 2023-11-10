@@ -64,6 +64,7 @@ typedef struct triobj
     int num_triangles;
     mlist *mptr;
     struct triobj *hptr;
+    unsigned char *color;
 } triobj;
 
 // testuraren informazioa
@@ -120,7 +121,7 @@ unsigned char *color_textura(float u, float v)
     return (lag + dimx * yp * 3 + xp * 3); // Hay que multiplicar por 3 porque cada punto son 3 posiciones (r,g,b)
 }
 
-void dibujar_linea(punto p1, punto p2)
+void dibujar_linea(punto p1, punto p2, unsigned char *color)
 {
     float j;
     unsigned char r, g, b;
@@ -155,7 +156,14 @@ void dibujar_linea(punto p1, punto p2)
         glBegin(GL_POINTS);
         if (ultimo_es_visible == 1)
         {
-            colorv = color_textura(pcalculado.u, pcalculado.v);
+            if (color != 0)
+            {
+                colorv = color;
+            }
+            else
+            {
+                colorv = color_textura(pcalculado.u, pcalculado.v);
+            }
             r = colorv[0];
             g = colorv[1];
             b = colorv[2];
@@ -308,9 +316,11 @@ void calcular_mperspectiva(mlist *mresptr, float n, float f, float r, float l, f
     mresptr->m[2] = (r + l) / r_menos_l;
     mresptr->m[5] = (2 * n) / t_menos_b;
     mresptr->m[6] = (t + b) / t_menos_b;
-    mresptr->m[10] = (-f + n) / f_menos_n;
+    mresptr->m[10] = -(f + n) / f_menos_n;
     mresptr->m[11] = (-2 * f * n) / f_menos_n;
     mresptr->m[14] = -1;
+
+    // print_matrizea2("Mpers\n",mresptr);
 }
 
 void aplicar_mperspectiva(punto *pptr, double m[16])
@@ -346,7 +356,9 @@ void aplicar_mperspectiva(punto *pptr, double m[16])
     pptr->z = -(ptemp.z / w);
     pptr->u = ptemp.u;
     pptr->v = ptemp.v;
-    // printf(" 2 pptr->x %f\n", pptr->x);
+
+    // printf("ptemp (%.3f,%.3f,%.3f)\n", ptemp.x / w, ptemp.y / w,ptemp.z / w);
+    //  printf(" 2 pptr->x %f\n", pptr->x);
 }
 
 // TODO: si miras a un objeto en tu misma pos va a dar error, siendo los resultados nan
@@ -559,9 +571,36 @@ void dibujar_triangulo(triobj *optr, int i)
     {
         // TODO : Calcular mperspectiva al inicio del codigo y reusar puntero
         calcular_mperspectiva(&mperspectiva, CAMARA_CONFIG_NEAR, CAMARA_CONFIG_FAR, CAMARA_CONFIG_RIGHT, CAMARA_CONFIG_LEFT, CAMARA_CONFIG_TOP, CAMARA_CONFIG_BOTTOM);
+        // printf("p1 (%.3f,%.3f,%.3f)  p2 (%.3f,%.3f,%.3f)  p3 (%.3f,%.3f,%.3f)\n", p1.x, p1.y, p1.z, p2.x, p2.y, p2.z, p3.x, p3.y, p3.z);
         aplicar_mperspectiva(&p1, mperspectiva.m);
         aplicar_mperspectiva(&p2, mperspectiva.m);
         aplicar_mperspectiva(&p3, mperspectiva.m);
+        // printf("p1_p (%.3f,%.3f,%.3f)  p2_p (%.3f,%.3f,%.3f)  p3_p (%.3f,%.3f,%.3f)\n", p1.x / 500, p1.y / 500, p1.z, p2.x / 500, p2.y / 500, p2.z, p3.x / 500, p3.y / 500, p3.z);
+
+        if (p1.z < -1 || p1.z > 1)
+            return;
+        if (p2.z < -1 || p2.z > 1)
+            return;
+        if (p3.z < -1 || p3.z > 1)
+            return;
+
+        if ((p1.y / 500) < -1 || (p1.y / 500) > 1)
+            return;
+        if ((p2.y / 500) < -1 || (p2.y / 500) > 1)
+            return;
+        if ((p3.y / 500) < -1 || (p3.y / 500) > 1)
+            return;
+
+        if ((p1.x / 500) < -1 || (p1.x / 500) > 1)
+            return;
+        if ((p2.x / 500) < -1 || (p2.x / 500) > 1)
+            return;
+        if ((p3.x / 500) < -1 || (p3.x / 500) > 1)
+            return;
+
+        // p1.z = CAMARA_CONFIG_NEAR;
+        // p2.z = CAMARA_CONFIG_NEAR;
+        // p3.z = CAMARA_CONFIG_NEAR;
     }
 
     if (lineak == 1)
@@ -589,7 +628,7 @@ void dibujar_triangulo(triobj *optr, int i)
             p2_vnormal.u = 0;
             p2_vnormal.v = 0;
 
-            printf("v_normal(%f,%f,%f)\n", tptr->v_normal.x, tptr->v_normal.y, tptr->v_normal.z);
+            // printf("v_normal(%f,%f,%f)\n", tptr->v_normal.x, tptr->v_normal.y, tptr->v_normal.z);
 
             mxp(&p2_vnormal_transformado, mmodelview_ptr->m, p2_vnormal);
             if (tipo_camara == CAMARA_PERSPECTIVA)
@@ -657,7 +696,7 @@ void dibujar_triangulo(triobj *optr, int i)
             pcorte2 = p3;
         }
 
-        dibujar_linea(pcorte1, pcorte2);
+        dibujar_linea(pcorte1, pcorte2,optr->color);
         return;
     }
 
@@ -691,7 +730,7 @@ void dibujar_triangulo(triobj *optr, int i)
         pcorte2.u = s * pgoiptr->u + (1 - s) * pbeheptr->u;
         pcorte2.v = s * pgoiptr->v + (1 - s) * pbeheptr->v;
 
-        dibujar_linea(pcorte1, pcorte2);
+        dibujar_linea(pcorte1, pcorte2,optr->color);
     }
 
     // Tenemos que sumarle para cancelar el cambio de mas que ha hecho en la ultima iteracion.
@@ -728,7 +767,7 @@ void dibujar_triangulo(triobj *optr, int i)
         pcorte2.u = s * pgoiptr->u + (1 - s) * pbeheptr->u;
         pcorte2.v = s * pgoiptr->v + (1 - s) * pbeheptr->v;
 
-        dibujar_linea(pcorte1, pcorte2);
+        dibujar_linea(pcorte1, pcorte2,optr->color);
     }
 }
 
@@ -825,6 +864,8 @@ static void marraztu(void)
                 {
                     dibujar_triangulo(auxptr, i);
                 }
+
+                print_matrizea2("Mcamara\n", camara_ptr->mptr);
             }
         }
         else
@@ -857,10 +898,10 @@ void read_from_file(char *fitx, int tipo_lista)
 
     // printf("%s fitxategitik datuak hartzera\n",fitx);
     optr = (triobj *)malloc(sizeof(triobj));
-    retval = cargar_triangulos(fitx, &(optr->num_triangles), &(optr->triptr));
-    if (retval != 1)
+    retval = cargar_triangulos_color(fitx, &(optr->num_triangles), &(optr->triptr), &(optr->color));
+    if (retval == 1)
     {
-        printf("%s fitxategitik datuak hartzerakoan arazoak izan ditut\n    Problemas al leer\n", fitxiz);
+        printf("%s fitxategitik datuak hartzerakoan arazoak izan ditut\n    Problemas al leer\n cod:%d\n", fitxiz, retval);
         free(optr);
     }
     else
@@ -880,6 +921,8 @@ void read_from_file(char *fitx, int tipo_lista)
         optr->hptr = (*foptr); // el siguiente al objeto es el que antes era el primero
         (*foptr) = optr;       // foptr(cambiado a un ptrptr que apunta dependiendo de la lista) apunta al primer objeto ( el ultimo cargado )
         (*sel_ptr) = optr;
+        if(retval == 9)
+        printf("COLOR (%d,%d,%d)\n",optr->color[0],optr->color[1],optr->color[2]);
     }
     printf("datuak irakurrita\nLecura finalizada\n");
 }

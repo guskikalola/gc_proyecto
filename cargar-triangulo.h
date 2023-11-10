@@ -16,3 +16,4 @@ vector v_normal;
 } hiruki;
 
 int cargar_triangulos(char *fitxiz, int *hkopptr, hiruki **hptrptr);
+int cargar_triangulos_color(char *fitxiz, int *hkopptr, hiruki **hptrptr, unsigned char **rgbptr);
