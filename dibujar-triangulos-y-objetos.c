@@ -20,8 +20,8 @@
 #define PROPORCION_ESCALADO 1.2
 #define DISTANCIA_MINIMA_ANALISIS 30
 
-#define CAMARA_CONFIG_NEAR -5.0
-#define CAMARA_CONFIG_FAR -500.0
+#define CAMARA_CONFIG_NEAR 5.0
+#define CAMARA_CONFIG_FAR 500.0
 #define CAMARA_CONFIG_LEFT -5.0
 #define CAMARA_CONFIG_RIGHT 5.0
 #define CAMARA_CONFIG_TOP 5.0
@@ -146,7 +146,6 @@ void dibujar_linea(punto p1, punto p2, unsigned char *color)
         cambioj = 1;
     else
         cambioj = 1 / (pcortemayor->x - pcortemenor->x);
-
 
     for (j = 1; j > 0; j -= cambioj)
     {
@@ -309,11 +308,20 @@ void calcular_mperspectiva(mlist *mresptr, float n, float f, float r, float l, f
     f_menos_n = f - n;
 
     if (r_menos_l == 0)
+    {
+        printf("r_menos_l == 0\n");
         return;
+    }
     if (t_menos_b == 0)
+    {
+        printf("t_menos_b == 0\n");
         return;
+    }
     if (f_menos_n == 0)
+    {
+        printf("f_menos_n == 0\n");
         return;
+    }
 
     mresptr->m[0] = (2 * n) / r_menos_l;
     mresptr->m[2] = (r + l) / r_menos_l;
@@ -340,17 +348,19 @@ int aplicar_mperspectiva(punto *pptr, double m[16])
         | 12 13 14 15 ]
     */
 
-
     ptemp.x = m[0] * pptr->x + m[1] * pptr->y + m[2] * pptr->z + m[3];
     ptemp.y = m[4] * pptr->x + m[5] * pptr->y + m[6] * pptr->z + m[7];
     ptemp.z = m[8] * pptr->x + m[9] * pptr->y + m[10] * pptr->z + m[11];
-    w = m[12] * pptr->x + m[13] * pptr->y + m[14] * pptr->z + m[15];
-    // w = -1 * pptr->z;
+    // w = m[12] * pptr->x + m[13] * pptr->y + m[14] * pptr->z + m[15];
+    w = m[14] * pptr->z;
     ptemp.u = pptr->u;
     ptemp.v = pptr->v;
 
     if (w == 0)
+    {
+        // printf("INTERSECCION CON PLANO NEAR\n");
         return -1; // Interseccion con plano near
+    }
 
     // printf("x=%f z=%f w=%f ptemp (%.3f,%.3f,%.3f)\n", pptr->x, pptr->z, w, ptemp.x / w, ptemp.y / w, -ptemp.z / w);
 
@@ -514,13 +524,13 @@ int es_visible(triobj *optr, int i)
 
     if (tipo_camara == CAMARA_PERSPECTIVA)
     {
-        double v[3] = {matriz_observador.m[3] - optr->mptr->m[3], matriz_observador.m[7] - optr->mptr->m[7], matriz_observador.m[11] - optr->mptr->m[11]}; // observador - punto
-        double v_n = v[0] * tptr->v_normal.x + v[1] * tptr->v_normal.y + v[2] * tptr->v_normal.z;                                                          // v * n
+        double v[3] = {matriz_observador.m[3], matriz_observador.m[7], matriz_observador.m[11]};  // observador - punto (0,0,0)
+        double v_n = v[0] * tptr->v_normal.x + v[1] * tptr->v_normal.y + v[2] * tptr->v_normal.z; // v * n
         return v_n > 0;
     }
     else // CAMARA_PARALELA
     {
-        double v[3] = {0, 0, matriz_observador.m[11] - optr->mptr->m[11]};                                                                               // observador - punto
+        // En paralelo unicamente nos interesa hacia donde esta mirando la camara, es decir, su vector de direccion hacia delante ( la z )
         double v_n = matriz_observador.m[2] * tptr->v_normal.x + matriz_observador.m[6] * tptr->v_normal.y + matriz_observador.m[10] * tptr->v_normal.z; // v * n
         return v_n > 0;
     }
@@ -540,7 +550,7 @@ void dibujar_triangulo(triobj *optr, int i)
 
     punto pcorte1, pcorte2;
 
-    // mlist mperspectiva;
+    int res_mpers_vnormal;
 
     if (i >= optr->num_triangles)
         return;
@@ -563,12 +573,15 @@ void dibujar_triangulo(triobj *optr, int i)
         // print_matrizea2("Mper\n", mperspectiva_ptr);
 
         // printf("-----\np1 (%.3f,%.3f,%.3f)  p2 (%.3f,%.3f,%.3f)  p3 (%.3f,%.3f,%.3f)\n", p1.x, p1.y, p1.z, p2.x, p2.y, p2.z, p3.x, p3.y, p3.z);
-        if(p1.z < CAMARA_CONFIG_NEAR || p2.z < CAMARA_CONFIG_NEAR || p3.z < CAMARA_CONFIG_NEAR)
+        if (p1.z >= CAMARA_CONFIG_NEAR || p2.z >= CAMARA_CONFIG_NEAR || p3.z >= CAMARA_CONFIG_NEAR)
             return;
-            
-        aplicar_mperspectiva(&p1, mperspectiva_ptr->m);
-        aplicar_mperspectiva(&p2, mperspectiva_ptr->m);
-        aplicar_mperspectiva(&p3, mperspectiva_ptr->m);
+
+        if (aplicar_mperspectiva(&p1, mperspectiva_ptr->m) != 0)
+            return;
+        if (aplicar_mperspectiva(&p2, mperspectiva_ptr->m) != 0)
+            return;
+        if (aplicar_mperspectiva(&p3, mperspectiva_ptr->m) != 0)
+            return;
         // printf("p1_p (%.3f,%.3f,%.3f)  p2_p (%.3f,%.3f,%.3f)  p3_p (%.3f,%.3f,%.3f)\n", p1.x / 500, p1.y / 500, p1.z, p2.x / 500, p2.y / 500, p2.z, p3.x / 500, p3.y / 500, p3.z);
 
         if (p1.z > 0 || p1.z < -1)
@@ -578,21 +591,40 @@ void dibujar_triangulo(triobj *optr, int i)
         if (p3.z > 0 || p3.z < -1)
             return;
 
-        // if ((p1.y / 500) < -1 || (p1.y / 500) > 1)
-        //     return;
-        // if ((p2.y / 500) < -1 || (p2.y / 500) > 1)
-        //     return;
-        // if ((p3.y / 500) < -1 || (p3.y / 500) > 1)
-        //     return;
+        p1.z *= 500;
+        p2.z *= 500;
+        p3.z *= 500;
 
-        // if ((p1.x / 500) < -1 || (p1.x / 500) > 1)
-        //     return;
-        // if ((p2.x / 500) < -1 || (p2.x / 500) > 1)
-        //     return;
-        // if ((p3.x / 500) < -1 || (p3.x / 500) > 1)
-        //     return;
 
-        // printf("p1_p (%.3f,%.3f,%.3f)  p2_p (%.3f,%.3f,%.3f)  p3_p (%.3f,%.3f,%.3f)\n--+--\n", p1.x, p1.y, p1.z, p2.x, p2.y, p2.z, p3.x, p3.y, p3.z);
+        if ((p1.y / 500) < -1)
+            p1.y = -500;
+        else if ((p1.y / 500) > 1)
+            p1.y = 500;
+        if ((p1.x / 500) < -1)
+            p1.x = -500;
+        else if ((p1.x / 500) > 1)
+            p1.x = 500;
+
+        if ((p2.y / 500) < -1)
+            p2.y = -500;
+        else if ((p2.y / 500) > 1)
+            p2.y = 500;
+        if ((p2.x / 500) < -1)
+            p2.x = -500;
+        else if ((p2.x / 500) > 1)
+            p2.x = 500;        
+
+        if ((p3.y / 500) < -1)
+            p3.y = -500;
+        else if ((p1.y / 500) > 1)
+            p3.y = 500;
+        if ((p3.x / 500) < -1)
+            p3.x = -500;
+        else if ((p3.x / 500) > 1)
+            p3.x = 500;
+
+         printf("-----\np1 (%.3f,%.3f,%.3f)  p2 (%.3f,%.3f,%.3f)  p3 (%.3f,%.3f,%.3f)\n", p1.x, p1.y, p1.z, p2.x, p2.y, p2.z, p3.x, p3.y, p3.z);
+
     }
 
     if (lineak == 1)
@@ -608,13 +640,12 @@ void dibujar_triangulo(triobj *optr, int i)
         glVertex3d(p2.x, p2.y, p2.z);
         glVertex3d(p3.x, p3.y, p3.z);
 
-        printf("p1 (%f,%f,%f) p2 (%f,%f,%f) p3 (%f,%f,%f)\n",p1.x,p1.y,p1.z,p2.x,p2.y,p2.z,p3.x,p3.y,p3.z);
+        // printf("p1 (%f,%f,%f) p2 (%f,%f,%f) p3 (%f,%f,%f)\n",p1.x,p1.y,p1.z,p2.x,p2.y,p2.z,p3.x,p3.y,p3.z);
 
         glEnd();
 
         if (dibujar_normales == 1)
         {
-            glBegin(GL_LINES);
 
             p2_vnormal.x = tptr->p1.x + tptr->v_normal.x * 40;
             p2_vnormal.y = tptr->p1.y + tptr->v_normal.y * 40;
@@ -627,13 +658,20 @@ void dibujar_triangulo(triobj *optr, int i)
             mxp(&p2_vnormal_transformado, mmodelview_ptr->m, p2_vnormal);
             if (tipo_camara == CAMARA_PERSPECTIVA)
             {
-                aplicar_mperspectiva(&p2_vnormal_transformado, mperspectiva_ptr->m);
+                res_mpers_vnormal = aplicar_mperspectiva(&p2_vnormal_transformado, mperspectiva_ptr->m);
+            }
+            else
+            {
+                res_mpers_vnormal = 0;
             }
 
-            glVertex3d(p1.x, p1.y, p1.z);
-            glVertex3d(p2_vnormal_transformado.x, p2_vnormal_transformado.y, p2_vnormal_transformado.z);
-
-            glEnd();
+            if (res_mpers_vnormal == 0)
+            {
+                glBegin(GL_LINES);
+                glVertex3d(p1.x, p1.y, p1.z);
+                glVertex3d(p2_vnormal_transformado.x, p2_vnormal_transformado.y, p2_vnormal_transformado.z);
+                glEnd();
+            }
         }
 
         return;
@@ -835,7 +873,7 @@ static void marraztu(void)
                     dibujar_triangulo(auxptr, i);
                 }
 
-                print_matrizea2("Mcamara\n", camara_ptr->mptr);
+                // print_matrizea2("Mcamara\n", camara_ptr->mptr);
             }
         }
         else
@@ -1496,6 +1534,11 @@ int main(int argc, char **argv)
 
         read_from_file("logoehu_planoa.txt", LISTA_OBJETOS);
         translacion(&matriz_transformacion, EJE_X, DIR_ADELANTE, 370);
+        aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
+
+        read_from_file("k.txt", LISTA_OBJETOS);
+        translacion(&matriz_transformacion, EJE_Z, DIR_ADELANTE, 200);
+        translacion(&matriz_transformacion, EJE_X, DIR_ADELANTE, 200);
         aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
     }
 
