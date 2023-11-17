@@ -16,7 +16,7 @@
 #include "cargar-triangulo.h"
 
 #define DESPLAZAMIENTO_TRANSLACION 5
-#define ANGULO_ROTACION 3.14159 / 90
+#define ANGULO_ROTACION 3.14159265358979323846 / 32
 #define PROPORCION_ESCALADO 1.2
 #define DISTANCIA_MINIMA_ANALISIS 30
 
@@ -142,6 +142,10 @@ void dibujar_linea(punto p1, punto p2, unsigned char *color)
         pcortemenor = &p1;
     }
 
+    // TODO: Esto no me convence. Evita que dibuje lineas super largas, pero no parece la manera correcta de hacerlo
+    if (abs(p1.x) > 670 || abs(p2.x) > 670 || abs(p1.y) > 670 || abs(p2.y) > 670)
+        return;
+
     if (pcortemayor->x - pcortemenor->x == 0)
         cambioj = 1;
     else
@@ -208,13 +212,6 @@ void mxp(punto *pptr, double m[16], punto p)
     pptr->z = m[8] * p.x + m[9] * p.y + m[10] * p.z + m[11];
     pptr->u = p.u;
     pptr->v = p.v;
-}
-
-void mxv(vector *vptr, double m[16], vector v)
-{
-    vptr->x = m[0] * v.x + m[1] * v.y + m[2] * v.z + m[3];
-    vptr->y = m[4] * v.x + m[5] * v.y + m[6] * v.z + m[7];
-    vptr->z = m[8] * v.x + m[9] * v.y + m[10] * v.z + m[11];
 }
 
 void mxm(double mresptr[16], double mA[16], double mB[16])
@@ -573,7 +570,8 @@ void dibujar_triangulo(triobj *optr, int i)
         // print_matrizea2("Mper\n", mperspectiva_ptr);
 
         // printf("-----\np1 (%.3f,%.3f,%.3f)  p2 (%.3f,%.3f,%.3f)  p3 (%.3f,%.3f,%.3f)\n", p1.x, p1.y, p1.z, p2.x, p2.y, p2.z, p3.x, p3.y, p3.z);
-        if (p1.z >= CAMARA_CONFIG_NEAR || p2.z >= CAMARA_CONFIG_NEAR || p3.z >= CAMARA_CONFIG_NEAR)
+
+        if (p1.z >= (-CAMARA_CONFIG_NEAR) || p2.z >= (-CAMARA_CONFIG_NEAR) || p3.z >= (-CAMARA_CONFIG_NEAR))
             return;
 
         if (aplicar_mperspectiva(&p1, mperspectiva_ptr->m) != 0)
@@ -584,47 +582,18 @@ void dibujar_triangulo(triobj *optr, int i)
             return;
         // printf("p1_p (%.3f,%.3f,%.3f)  p2_p (%.3f,%.3f,%.3f)  p3_p (%.3f,%.3f,%.3f)\n", p1.x / 500, p1.y / 500, p1.z, p2.x / 500, p2.y / 500, p2.z, p3.x / 500, p3.y / 500, p3.z);
 
-        if (p1.z > 0 || p1.z < -1)
+        if (p1.z < -1 || p1.z >= 0)
             return;
-        if (p2.z > 0 || p2.z < -1)
+        if (p2.z < -1 || p2.z >= 0)
             return;
-        if (p3.z > 0 || p3.z < -1)
+        if (p3.z < -1 || p3.z >= 0)
             return;
 
         p1.z *= 500;
         p2.z *= 500;
         p3.z *= 500;
 
-
-        if ((p1.y / 500) < -1)
-            p1.y = -500;
-        else if ((p1.y / 500) > 1)
-            p1.y = 500;
-        if ((p1.x / 500) < -1)
-            p1.x = -500;
-        else if ((p1.x / 500) > 1)
-            p1.x = 500;
-
-        if ((p2.y / 500) < -1)
-            p2.y = -500;
-        else if ((p2.y / 500) > 1)
-            p2.y = 500;
-        if ((p2.x / 500) < -1)
-            p2.x = -500;
-        else if ((p2.x / 500) > 1)
-            p2.x = 500;        
-
-        if ((p3.y / 500) < -1)
-            p3.y = -500;
-        else if ((p1.y / 500) > 1)
-            p3.y = 500;
-        if ((p3.x / 500) < -1)
-            p3.x = -500;
-        else if ((p3.x / 500) > 1)
-            p3.x = 500;
-
-         printf("-----\np1 (%.3f,%.3f,%.3f)  p2 (%.3f,%.3f,%.3f)  p3 (%.3f,%.3f,%.3f)\n", p1.x, p1.y, p1.z, p2.x, p2.y, p2.z, p3.x, p3.y, p3.z);
-
+        // printf("-----\np1 (%.3f,%.3f,%.3f)  p2 (%.3f,%.3f,%.3f)  p3 (%.3f,%.3f,%.3f)\n", p1.x, p1.y, p1.z, p2.x, p2.y, p2.z, p3.x, p3.y, p3.z);
     }
 
     if (lineak == 1)
@@ -659,6 +628,8 @@ void dibujar_triangulo(triobj *optr, int i)
             if (tipo_camara == CAMARA_PERSPECTIVA)
             {
                 res_mpers_vnormal = aplicar_mperspectiva(&p2_vnormal_transformado, mperspectiva_ptr->m);
+                if (p2_vnormal_transformado.z < -1 || p2_vnormal_transformado.z >= 0)
+                    res_mpers_vnormal = -1;
             }
             else
             {
@@ -1528,7 +1499,7 @@ int main(int argc, char **argv)
         translacion(&matriz_transformacion, EJE_X, DIR_ATRAS, 240);
         aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
 
-        read_from_file("z.txt", LISTA_OBJETOS);
+        read_from_file("k.txt", LISTA_OBJETOS);
         translacion(&matriz_transformacion, EJE_Y, DIR_ATRAS, 20);
         aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
 
