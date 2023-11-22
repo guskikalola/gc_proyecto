@@ -807,7 +807,12 @@ static void marraztu(void)
     // glOrtho(-500.0, 500.0, -500.0, 500.0, -500.0, 500.0);
     // glOrtho(-500.0, 500.0, -500.0, 500.0, 0.0, 500.0); // Para no dibujar lo que está detrás
     // glOrtho(CAMARA_CONFIG_LEFT, CAMARA_CONFIG_RIGHT, CAMARA_CONFIG_BOTTOM, CAMARA_CONFIG_TOP, CAMARA_CONFIG_NEAR, CAMARA_CONFIG_FAR); // Para no dibujar lo que está detrás
-    glOrtho(-500.0, 500.0, -500.0, 500.0, -500.0, 500.0);
+    if (tipo_camara == CAMARA_PARALELA)
+    {
+        glOrtho(-500.0, 500.0, -500.0, 500.0, 0, 500.0);
+    }
+    else
+        glOrtho(-500.0, 500.0, -500.0, 500.0, -500.0, 500.0);
 
     mcsr_ptr = &mcsr;
     mmodelview_ptr = &mmodelview;
