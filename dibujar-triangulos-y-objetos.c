@@ -15,7 +15,7 @@
 #include <math.h>
 #include "cargar-triangulo.h"
 
-#define DESPLAZAMIENTO_TRANSLACION 5
+#define DESPLAZAMIENTO_TRANSLACION 10
 #define ANGULO_ROTACION 3.14159265358979323846 / 32
 #define PROPORCION_ESCALADO 1.2
 #define DISTANCIA_MINIMA_ANALISIS 30
@@ -142,14 +142,14 @@ void dibujar_linea(punto p1, punto p2, unsigned char *color)
         pcortemenor = &p1;
     }
 
-    // TODO: Esto no me convence. Evita que dibuje lineas super largas, pero no parece la manera correcta de hacerlo
-    if (abs(p1.x) > 670 || abs(p2.x) > 670 || abs(p1.y) > 670 || abs(p2.y) > 670)
-        return;
-
     if (pcortemayor->x - pcortemenor->x == 0)
         cambioj = 1;
     else
         cambioj = 1 / (pcortemayor->x - pcortemenor->x);
+
+    // TODO: NO ES PERFECTO PERO ME VALE POR AHORA
+    if(abs(p1.x) > 500 || abs(p1.y) > 500 || abs(p2.x) > 500 || abs(p2.y) > 500)
+        return;
 
     for (j = 1; j > 0; j -= cambioj)
     {
@@ -203,6 +203,47 @@ void print_matrizea2(char *str, mlist *matrizea)
     for (i = 0; i < 4; i++)
         printf("%lf, %lf, %lf, %lf\n", matrizea->m[i * 4], matrizea->m[i * 4 + 1], matrizea->m[i * 4 + 2],
                matrizea->m[i * 4 + 3]);
+}
+
+void print_estado()
+{
+    printf("\n");
+    printf("------------(COMIENZO ESTADO)------------\n");
+
+    print_matrizea2("Posición cámara:", camara_ptr->mptr);
+    printf("\n");
+
+    printf("Modo cámara (g): ");
+    if (modo_camara == CAMARA_MOD_VUELO)
+        printf("VUELO\n");
+    else
+        printf("ANALISIS\n");
+
+    printf("Tipo camara (p): ");
+    if (tipo_camara == CAMARA_PERSPECTIVA)
+        printf("PERSPECTIVA\n");
+    else
+        printf("PARALELO\n");
+
+    printf("Lista activa (c): ");
+    if (lista_activa == LISTA_CAMARAS)
+        printf("CAMARAS\n");
+    else
+        printf("OBJETOS\n");
+
+    printf("Dibujando caras traseras (b): ");
+    if (dibujar_no_visible == 1)
+        printf("SI\n");
+    else
+        printf("NO\n");
+
+    printf("Dibujando normales (n): ");
+    if (dibujar_normales == 1)
+        printf("SI\n");
+    else
+        printf("NO\n");
+
+    printf("------------(FIN ESTADO)------------\n");
 }
 
 void mxp(punto *pptr, double m[16], punto p)
@@ -331,6 +372,9 @@ void calcular_mperspectiva(mlist *mresptr, float n, float f, float r, float l, f
     // print_matrizea2("Mpers\n",mresptr);
 }
 
+// Devuelve 0 si el punto está dentro del campo de vision
+// Devuelve -1 si la cuarta componente es 0 y la division da infinito
+// Devuelve -2 si el punto esta detras de la camara
 int aplicar_mperspectiva(punto *pptr, double m[16])
 {
 
@@ -364,12 +408,19 @@ int aplicar_mperspectiva(punto *pptr, double m[16])
     // printf(" 1 ptemp.x %f\n", ptemp.x);
     // printf(" 1 pptr->x %f\n", pptr->x);
     // printf(" 1 w %f\n", w);
-
     pptr->x = (ptemp.x / w) * 500;
     pptr->y = (ptemp.y / w) * 500;
-    pptr->z = -(ptemp.z / w);
+    pptr->z = -(ptemp.z / abs(w));
     pptr->u = ptemp.u;
     pptr->v = ptemp.v;
+
+    // z visible [-500,-CAMARA_CONFIG_NEAR)
+    if (pptr->z >= 0 || pptr->z <= -1)
+    {
+        return -2;
+    }
+
+    pptr->z *= 500;
 
     return 0;
 
@@ -528,7 +579,7 @@ int es_visible(triobj *optr, int i)
     else // CAMARA_PARALELA
     {
         // En paralelo unicamente nos interesa hacia donde esta mirando la camara, es decir, su vector de direccion hacia delante ( la z )
-        double v_n = matriz_observador.m[2] * tptr->v_normal.x + matriz_observador.m[6] * tptr->v_normal.y + matriz_observador.m[10] * tptr->v_normal.z; // v * n
+        double v_n = matriz_observador.m[2] * tptr->v_normal.x + matriz_observador.m[6] * tptr->v_normal.y + matriz_observador.m[10] * tptr->v_normal.z; // vector_z_camara * n
         return v_n > 0;
     }
 }
@@ -566,13 +617,6 @@ void dibujar_triangulo(triobj *optr, int i)
     // Si la camara esta en perspectiva, aplicar (Mp * Mcsr * Mobj * Obj)
     if (tipo_camara == CAMARA_PERSPECTIVA)
     {
-        // printf("p1 (%.3f,%.3f,%.3f)  p2 (%.3f,%.3f,%.3f)  p3 (%.3f,%.3f,%.3f)\n", p1.x, p1.y, p1.z, p2.x, p2.y, p2.z, p3.x, p3.y, p3.z);
-        // print_matrizea2("Mper\n", mperspectiva_ptr);
-
-        // printf("-----\np1 (%.3f,%.3f,%.3f)  p2 (%.3f,%.3f,%.3f)  p3 (%.3f,%.3f,%.3f)\n", p1.x, p1.y, p1.z, p2.x, p2.y, p2.z, p3.x, p3.y, p3.z);
-
-        if (p1.z >= (-CAMARA_CONFIG_NEAR) || p2.z >= (-CAMARA_CONFIG_NEAR) || p3.z >= (-CAMARA_CONFIG_NEAR))
-            return;
 
         if (aplicar_mperspectiva(&p1, mperspectiva_ptr->m) != 0)
             return;
@@ -580,20 +624,7 @@ void dibujar_triangulo(triobj *optr, int i)
             return;
         if (aplicar_mperspectiva(&p3, mperspectiva_ptr->m) != 0)
             return;
-        // printf("p1_p (%.3f,%.3f,%.3f)  p2_p (%.3f,%.3f,%.3f)  p3_p (%.3f,%.3f,%.3f)\n", p1.x / 500, p1.y / 500, p1.z, p2.x / 500, p2.y / 500, p2.z, p3.x / 500, p3.y / 500, p3.z);
 
-        if (p1.z < -1 || p1.z >= 0)
-            return;
-        if (p2.z < -1 || p2.z >= 0)
-            return;
-        if (p3.z < -1 || p3.z >= 0)
-            return;
-
-        p1.z *= 500;
-        p2.z *= 500;
-        p3.z *= 500;
-
-        // printf("-----\np1 (%.3f,%.3f,%.3f)  p2 (%.3f,%.3f,%.3f)  p3 (%.3f,%.3f,%.3f)\n", p1.x, p1.y, p1.z, p2.x, p2.y, p2.z, p3.x, p3.y, p3.z);
     }
 
     if (lineak == 1)
@@ -628,8 +659,8 @@ void dibujar_triangulo(triobj *optr, int i)
             if (tipo_camara == CAMARA_PERSPECTIVA)
             {
                 res_mpers_vnormal = aplicar_mperspectiva(&p2_vnormal_transformado, mperspectiva_ptr->m);
-                if (p2_vnormal_transformado.z < -1 || p2_vnormal_transformado.z >= 0)
-                    res_mpers_vnormal = -1;
+                // if (p2_vnormal_transformado.z < -1 || p2_vnormal_transformado.z >= 0)
+                //     res_mpers_vnormal = -1;
             }
             else
             {
@@ -1166,6 +1197,7 @@ void tratar_transformacion_modo_analisis(int eje, int dir)
     // print_matrizea2("Mcam:\n", camara_ptr->mptr);
     // print_matrizea2("Mobj:\n", obj_ptr->mptr);
     ajustar_distancia_analisis();
+    print_estado();
 }
 
 void tratar_transformacion(int eje, int dir)
@@ -1204,6 +1236,8 @@ void tratar_transformacion(int eje, int dir)
         aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL); // La camara siempre en sis.local
     else
         aplicar_transformacion(&matriz_transformacion, ald_lokala);
+
+    print_estado();
 }
 
 void x_aldaketa(int dir)
