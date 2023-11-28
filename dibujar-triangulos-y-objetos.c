@@ -147,9 +147,9 @@ void dibujar_linea(punto p1, punto p2, unsigned char *color)
     else
         cambioj = 1 / (pcortemayor->x - pcortemenor->x);
 
-    // TODO: NO ES PERFECTO PERO ME VALE POR AHORA
-    if(abs(p1.x) > 500 || abs(p1.y) > 500 || abs(p2.x) > 500 || abs(p2.y) > 500)
-        return;
+    if(pcortemayor->x - pcortemenor->x > 1000) return;
+    if(abs(pcortemayor->y - pcortemenor->y) > 1000) return;
+    if(abs(pcortemayor->z - pcortemenor->z) > 1000) return;
 
     for (j = 1; j > 0; j -= cambioj)
     {
@@ -158,6 +158,9 @@ void dibujar_linea(punto p1, punto p2, unsigned char *color)
         pcalculado.z = j * pcortemayor->z + (1 - j) * pcortemenor->z;
         pcalculado.u = j * pcortemayor->u + (1 - j) * pcortemenor->u;
         pcalculado.v = j * pcortemayor->v + (1 - j) * pcortemenor->v;
+
+        // TODO: Por ahora me vale para mejorar un poco el rendimiento
+        if(abs(pcalculado.x) > 500 || abs(pcalculado.y) > 500) continue;
 
         glBegin(GL_POINTS);
         if (ultimo_es_visible == 1)
@@ -397,7 +400,7 @@ int aplicar_mperspectiva(punto *pptr, double m[16])
     ptemp.u = pptr->u;
     ptemp.v = pptr->v;
 
-    if (w == 0)
+    if (abs(w) < 1)
     {
         // printf("INTERSECCION CON PLANO NEAR\n");
         return -1; // Interseccion con plano near
