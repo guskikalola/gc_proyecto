@@ -150,9 +150,12 @@ void dibujar_linea(punto p1, punto p2, color3 color)
     else
         cambioj = 1 / (pcortemayor->x - pcortemenor->x);
 
-    if(pcortemayor->x - pcortemenor->x > 1000) return;
-    if(abs(pcortemayor->y - pcortemenor->y) > 1000) return;
-    if(abs(pcortemayor->z - pcortemenor->z) > 1000) return;
+    if (pcortemayor->x - pcortemenor->x > 1000)
+        return;
+    if (abs(pcortemayor->y - pcortemenor->y) > 1000)
+        return;
+    if (abs(pcortemayor->z - pcortemenor->z) > 1000)
+        return;
 
     for (j = 1; j > 0; j -= cambioj)
     {
@@ -163,7 +166,8 @@ void dibujar_linea(punto p1, punto p2, color3 color)
         pcalculado.v = j * pcortemayor->v + (1 - j) * pcortemenor->v;
 
         // TODO: Por ahora me vale para mejorar un poco el rendimiento
-        if(abs(pcalculado.x) > 500 || abs(pcalculado.y) > 500) continue;
+        if (abs(pcalculado.x) > 500 || abs(pcalculado.y) > 500)
+            continue;
 
         glBegin(GL_POINTS);
         if (ultimo_es_visible == 1)
@@ -255,7 +259,6 @@ void mxp(punto *pptr, double m[16], punto p)
 
 void mxv(punto *pptr, double m[16], vertex v)
 {
-    printf("%d\n",v.coord.x);
     pptr->x = m[0] * v.coord.x + m[1] * v.coord.y + m[2] * v.coord.z + m[3];
     pptr->y = m[4] * v.coord.x + m[5] * v.coord.y + m[6] * v.coord.z + m[7];
     pptr->z = m[8] * v.coord.x + m[9] * v.coord.y + m[10] * v.coord.z + m[11];
@@ -572,6 +575,9 @@ int es_visible(object3d *optr, int i)
         return 0;
     fptr = optr->face_table + i;
 
+    if (fptr->num_vertices == 0 || optr->num_vertices == 0)
+        return 0;
+
     calcular_mcsr(&matriz_csr_objeto, optr->mptr->m);
     mxm(matriz_observador.m, matriz_csr_objeto.m, observadorptr->mptr->m);
 
@@ -580,9 +586,8 @@ int es_visible(object3d *optr, int i)
 
     if (tipo_camara == CAMARA_PERSPECTIVA)
     {
-        printf("x=%fy=%f,z=%f\n",optr->vertex_table[fptr->vertex_ind_table[0]].coord.x,optr->vertex_table[fptr->vertex_ind_table[0]].coord.y,optr->vertex_table[fptr->vertex_ind_table[0]].coord.z);
-        double v[3] = {matriz_observador.m[3] - optr->vertex_table[fptr->vertex_ind_table[0]].coord.x, matriz_observador.m[7] - optr->vertex_table[fptr->vertex_ind_table[0]].coord.y, matriz_observador.m[11] - optr->vertex_table[fptr->vertex_ind_table[0]].coord.z};  // observador - punto (0,0,0)
-        double v_n = v[0] * fptr->N[0] + v[1] * fptr->N[1] + v[2] * fptr->N[2]; // v * n
+        double v[3] = {matriz_observador.m[3] - optr->vertex_table[fptr->vertex_ind_table[0]].coord.x, matriz_observador.m[7] - optr->vertex_table[fptr->vertex_ind_table[0]].coord.y, matriz_observador.m[11] - optr->vertex_table[fptr->vertex_ind_table[0]].coord.z}; // observador - punto (0,0,0)
+        double v_n = v[0] * fptr->N[0] + v[1] * fptr->N[1] + v[2] * fptr->N[2];                                                                                                                                                                                          // v * n
         return v_n > 0;
     }
     else // CAMARA_PARALELA
@@ -613,7 +618,7 @@ void dibujar_triangulo(object3d *optr, int i)
         return;
     fptr = optr->face_table + i;
 
-    if(fptr->num_vertices == 0 || optr->num_vertices == 0)
+    if (fptr->num_vertices == 0 || optr->num_vertices == 0)
         return;
 
     ultimo_es_visible = es_visible(optr, i);
@@ -622,15 +627,9 @@ void dibujar_triangulo(object3d *optr, int i)
         return;
 
     // (Mcsr * Mobj) * Obj
-    printf("fptr->num_vertices=%d\n",fptr->num_vertices);
-    printf("optr->num_vertices=%d\n",optr->num_vertices);
-    printf("fptr->vertex_ind_table[0]=%d\n",fptr->vertex_ind_table[0]);
-    printf("fptr->vertex_ind_table[1]=%d\n",fptr->vertex_ind_table[1]);
-    printf("fptr->vertex_ind_table[2]=%d\n",fptr->vertex_ind_table[2]);
     mxv(&p1, mmodelview_ptr->m, optr->vertex_table[fptr->vertex_ind_table[0]]);
     mxv(&p2, mmodelview_ptr->m, optr->vertex_table[fptr->vertex_ind_table[1]]);
     mxv(&p3, mmodelview_ptr->m, optr->vertex_table[fptr->vertex_ind_table[2]]);
-    printf("done\n");
 
     // Si la camara esta en perspectiva, aplicar (Mp * Mcsr * Mobj * Obj)
     if (tipo_camara == CAMARA_PERSPECTIVA)
@@ -642,7 +641,6 @@ void dibujar_triangulo(object3d *optr, int i)
             return;
         if (aplicar_mperspectiva(&p3, mperspectiva_ptr->m) != 0)
             return;
-
     }
 
     if (lineak == 1)
@@ -665,14 +663,12 @@ void dibujar_triangulo(object3d *optr, int i)
         if (dibujar_normales == 1)
         {
 
-            p2_vnormal.x = optr->vertex_table[fptr->vertex_ind_table[0]].coord.x + fptr->N[0] * 40;
-            p2_vnormal.y = optr->vertex_table[fptr->vertex_ind_table[0]].coord.y + fptr->N[1] * 40;
-            p2_vnormal.z = optr->vertex_table[fptr->vertex_ind_table[0]].coord.z + fptr->N[2] * 40;
+            // NORMALES DE LAS CARAS
+            p2_vnormal.x = optr->vertex_table[fptr->vertex_ind_table[0]].coord.x + fptr->N[0] * 20;
+            p2_vnormal.y = optr->vertex_table[fptr->vertex_ind_table[0]].coord.y + fptr->N[1] * 20;
+            p2_vnormal.z = optr->vertex_table[fptr->vertex_ind_table[0]].coord.z + fptr->N[2] * 20;
             p2_vnormal.u = 0;
             p2_vnormal.v = 0;
-
-            // printf("v_normal(%f,%f,%f)\n", tptr->v_normal.x, tptr->v_normal.y, tptr->v_normal.z);
-
             mxp(&p2_vnormal_transformado, mmodelview_ptr->m, p2_vnormal);
             if (tipo_camara == CAMARA_PERSPECTIVA)
             {
@@ -691,6 +687,39 @@ void dibujar_triangulo(object3d *optr, int i)
                 glVertex3d(p1.x, p1.y, p1.z);
                 glVertex3d(p2_vnormal_transformado.x, p2_vnormal_transformado.y, p2_vnormal_transformado.z);
                 glEnd();
+            }
+
+            // NORMALES DE LOS VERTICES
+            for (i = 0; i < fptr->num_vertices; i++)
+            {
+                // printf("optr->vertex_table[fptr->vertex_ind_table[i]].coord.x=%f\n",optr->vertex_table[fptr->vertex_ind_table[i]].coord.x);
+                // printf("optr->vertex_table[fptr->vertex_ind_table[i]].N[0]=%f\n",optr->vertex_table[fptr->vertex_ind_table[i]].N[0]);
+                p2_vnormal.x = optr->vertex_table[fptr->vertex_ind_table[i]].coord.x + optr->vertex_table[fptr->vertex_ind_table[i]].N[0] * 3;
+                p2_vnormal.y = optr->vertex_table[fptr->vertex_ind_table[i]].coord.y + optr->vertex_table[fptr->vertex_ind_table[i]].N[1] * 3;
+                p2_vnormal.z = optr->vertex_table[fptr->vertex_ind_table[i]].coord.z + optr->vertex_table[fptr->vertex_ind_table[i]].N[2] * 3;
+                p2_vnormal.u = 0;
+                p2_vnormal.v = 0;
+
+                mxp(&p2_vnormal_transformado, mmodelview_ptr->m, p2_vnormal);
+                if (tipo_camara == CAMARA_PERSPECTIVA)
+                {
+                    res_mpers_vnormal = aplicar_mperspectiva(&p2_vnormal_transformado, mperspectiva_ptr->m);
+                    // if (p2_vnormal_transformado.z < -1 || p2_vnormal_transformado.z >= 0)
+                    //     res_mpers_vnormal = -1;
+                }
+                else
+                {
+                    res_mpers_vnormal = 0;
+                }
+
+                if (res_mpers_vnormal == 0)
+                {
+                    glBegin(GL_LINES);
+                    glColor3ub(134,134,134);
+                    glVertex3d(p1.x, p1.y, p1.z);
+                    glVertex3d(p2_vnormal_transformado.x, p2_vnormal_transformado.y, p2_vnormal_transformado.z);
+                    glEnd();
+                }
             }
         }
 
@@ -933,7 +962,7 @@ void read_from_file(char *fitx, int tipo_lista)
     optr = (object3d *)malloc(sizeof(object3d));
     // retval = cargar_triangulos_color(fitx, &(optr->num_faces), &(optr->triptr), &(optr->color));
     retval = read_wavefront(fitx, optr);
-    if (retval == 1)
+    if (retval != 0)
     {
         printf("%s fitxategitik datuak hartzerakoan arazoak izan ditut\n    Problemas al leer\n cod:%d\n", fitxiz, retval);
         free(optr);
@@ -1544,7 +1573,7 @@ int main(int argc, char **argv)
     dibujar_normales = 1;
 
     // TODO: Temporal, cargar una camara como un objeto. Buscar otra manera mas simple
-    read_from_file("camara.txt", LISTA_CAMARAS);
+    read_from_file("box.obj", LISTA_CAMARAS);
     camara_ptr = (*sel_ptr);
 
     translacion(&matriz_transformacion, EJE_Z, DIR_ADELANTE, 300);
