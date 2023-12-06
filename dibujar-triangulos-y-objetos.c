@@ -13,7 +13,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
-#include "cargar-triangulo.h"
+// #include "cargar-triangulo.h"
+#include "obj.h"
 
 #define DESPLAZAMIENTO_TRANSLACION 10
 #define ANGULO_ROTACION 3.14159265358979323846 / 32
@@ -52,12 +53,13 @@
 #define CAMARA_MOD_VUELO 0
 #define CAMARA_MOD_ANALISIS 1
 
-typedef struct mlist
-{
-    double m[16];
-    struct mlist *hptr;
-} mlist;
+// typedef struct mlist
+// {
+//     double m[16];
+//     struct mlist *hptr;
+// } mlist;
 
+/*
 typedef struct triobj
 {
     hiruki *triptr;
@@ -66,6 +68,7 @@ typedef struct triobj
     struct triobj *hptr;
     unsigned char *color;
 } triobj;
+*/
 
 // testuraren informazioa
 // información de textura
@@ -75,21 +78,21 @@ unsigned char *bufferra;
 int dimx, dimy;
 
 int indexx;
-hiruki *triangulosptr;
+// hiruki *triangulosptr;
 mlist *mcsr_ptr;
 mlist *mmodelview_ptr;
 mlist *mperspectiva_ptr;
 
-triobj *objetosptr; // Lista de objetos ( Apunta al primer objeto )
-triobj *obj_ptr;    // Puntero al objeto seleccionado de la lista
+object3d *objetosptr; // Lista de objetos ( Apunta al primer objeto )
+object3d *obj_ptr;    // Puntero al objeto seleccionado de la lista
 
-triobj *camarasptr; // Lista de camaras ( Apunta a la primera camara )
-triobj *camara_ptr; // Puntero a la camara seleccionada de la lista
+object3d *camarasptr; // Lista de camaras ( Apunta a la primera camara )
+object3d *camara_ptr; // Puntero a la camara seleccionada de la lista
 
 int lista_activa; // Indicador de la lista actualmente activa ( Camaras, objetos, ... ). Solo lectura
 
-triobj **foptr;   // Puntero al puntero del primer objeto de la lista activa (independiente de la lista)
-triobj **sel_ptr; // Puntero al puntero del objeto actualmente seleccionado (independiente de la lista)
+object3d **foptr;   // Puntero al puntero del primer objeto de la lista activa (independiente de la lista)
+object3d **sel_ptr; // Puntero al puntero del objeto actualmente seleccionado (independiente de la lista)
 
 int camara_activa; // Si estamos viendo desde la camara o no ( en caso negativo vemos desde objeto )
 int tipo_camara;
@@ -122,7 +125,7 @@ unsigned char *color_textura(float u, float v)
     return (lag + dimx * yp * 3 + xp * 3); // Hay que multiplicar por 3 porque cada punto son 3 posiciones (r,g,b)
 }
 
-void dibujar_linea(punto p1, punto p2, unsigned char *color)
+void dibujar_linea(punto p1, punto p2, color3 color)
 {
     float j;
     unsigned char r, g, b;
@@ -165,17 +168,9 @@ void dibujar_linea(punto p1, punto p2, unsigned char *color)
         glBegin(GL_POINTS);
         if (ultimo_es_visible == 1)
         {
-            if (color != 0)
-            {
-                colorv = color;
-            }
-            else
-            {
-                colorv = color_textura(pcalculado.u, pcalculado.v);
-            }
-            r = colorv[0];
-            g = colorv[1];
-            b = colorv[2];
+            r = color.r;
+            g = color.g;
+            b = color.b;
         }
         else
         {
@@ -256,6 +251,16 @@ void mxp(punto *pptr, double m[16], punto p)
     pptr->z = m[8] * p.x + m[9] * p.y + m[10] * p.z + m[11];
     pptr->u = p.u;
     pptr->v = p.v;
+}
+
+void mxv(punto *pptr, double m[16], vertex v)
+{
+    printf("%d\n",v.coord.x);
+    pptr->x = m[0] * v.coord.x + m[1] * v.coord.y + m[2] * v.coord.z + m[3];
+    pptr->y = m[4] * v.coord.x + m[5] * v.coord.y + m[6] * v.coord.z + m[7];
+    pptr->z = m[8] * v.coord.x + m[9] * v.coord.y + m[10] * v.coord.z + m[11];
+    pptr->u = v.u;
+    pptr->v = v.v;
 }
 
 void mxm(double mresptr[16], double mA[16], double mB[16])
@@ -432,7 +437,7 @@ int aplicar_mperspectiva(punto *pptr, double m[16])
 
 // TODO: si miras a un objeto en tu misma pos va a dar error, siendo los resultados nan
 // Arreglo temporal: Poner la identidad en los vectores
-void look_at(triobj *observadorptr, triobj *objetivoptr)
+void look_at(object3d *observadorptr, object3d *objetivoptr)
 {
     int i;
     mlist *nueva_matrizptr = (mlist *)malloc(sizeof(mlist));
@@ -551,10 +556,10 @@ void cambiar_lista_activa(int lista)
     printf("Se ha cambiado la lista activa a: %s\n", nombre_lista);
 }
 
-int es_visible(triobj *optr, int i)
+int es_visible(object3d *optr, int i)
 {
-    hiruki *tptr;
-    triobj *observadorptr;
+    face *fptr;
+    object3d *observadorptr;
     mlist matriz_csr_objeto;
     mlist matriz_observador;
 
@@ -563,9 +568,9 @@ int es_visible(triobj *optr, int i)
     else
         observadorptr = obj_ptr;
 
-    if (i >= optr->num_triangles)
+    if (i >= optr->num_faces)
         return 0;
-    tptr = optr->triptr + i;
+    fptr = optr->face_table + i;
 
     calcular_mcsr(&matriz_csr_objeto, optr->mptr->m);
     mxm(matriz_observador.m, matriz_csr_objeto.m, observadorptr->mptr->m);
@@ -575,21 +580,22 @@ int es_visible(triobj *optr, int i)
 
     if (tipo_camara == CAMARA_PERSPECTIVA)
     {
-        double v[3] = {matriz_observador.m[3], matriz_observador.m[7], matriz_observador.m[11]};  // observador - punto (0,0,0)
-        double v_n = v[0] * tptr->v_normal.x + v[1] * tptr->v_normal.y + v[2] * tptr->v_normal.z; // v * n
+        printf("x=%fy=%f,z=%f\n",optr->vertex_table[fptr->vertex_ind_table[0]].coord.x,optr->vertex_table[fptr->vertex_ind_table[0]].coord.y,optr->vertex_table[fptr->vertex_ind_table[0]].coord.z);
+        double v[3] = {matriz_observador.m[3] - optr->vertex_table[fptr->vertex_ind_table[0]].coord.x, matriz_observador.m[7] - optr->vertex_table[fptr->vertex_ind_table[0]].coord.y, matriz_observador.m[11] - optr->vertex_table[fptr->vertex_ind_table[0]].coord.z};  // observador - punto (0,0,0)
+        double v_n = v[0] * fptr->N[0] + v[1] * fptr->N[1] + v[2] * fptr->N[2]; // v * n
         return v_n > 0;
     }
     else // CAMARA_PARALELA
     {
         // En paralelo unicamente nos interesa hacia donde esta mirando la camara, es decir, su vector de direccion hacia delante ( la z )
-        double v_n = matriz_observador.m[2] * tptr->v_normal.x + matriz_observador.m[6] * tptr->v_normal.y + matriz_observador.m[10] * tptr->v_normal.z; // vector_z_camara * n
+        double v_n = matriz_observador.m[2] * fptr->N[0] + matriz_observador.m[6] * fptr->N[1] + matriz_observador.m[10] * fptr->N[2]; // vector_z_camara * n
         return v_n > 0;
     }
 }
 
-void dibujar_triangulo(triobj *optr, int i)
+void dibujar_triangulo(object3d *optr, int i)
 {
-    hiruki *tptr;
+    face *fptr;
 
     punto *pgoiptr, *pbeheptr, *perdiptr;
     punto p1, p2, p3;
@@ -603,9 +609,12 @@ void dibujar_triangulo(triobj *optr, int i)
 
     int res_mpers_vnormal;
 
-    if (i >= optr->num_triangles)
+    if (i >= optr->num_faces)
         return;
-    tptr = optr->triptr + i;
+    fptr = optr->face_table + i;
+
+    if(fptr->num_vertices == 0 || optr->num_vertices == 0)
+        return;
 
     ultimo_es_visible = es_visible(optr, i);
 
@@ -613,9 +622,15 @@ void dibujar_triangulo(triobj *optr, int i)
         return;
 
     // (Mcsr * Mobj) * Obj
-    mxp(&p1, mmodelview_ptr->m, tptr->p1);
-    mxp(&p2, mmodelview_ptr->m, tptr->p2);
-    mxp(&p3, mmodelview_ptr->m, tptr->p3);
+    printf("fptr->num_vertices=%d\n",fptr->num_vertices);
+    printf("optr->num_vertices=%d\n",optr->num_vertices);
+    printf("fptr->vertex_ind_table[0]=%d\n",fptr->vertex_ind_table[0]);
+    printf("fptr->vertex_ind_table[1]=%d\n",fptr->vertex_ind_table[1]);
+    printf("fptr->vertex_ind_table[2]=%d\n",fptr->vertex_ind_table[2]);
+    mxv(&p1, mmodelview_ptr->m, optr->vertex_table[fptr->vertex_ind_table[0]]);
+    mxv(&p2, mmodelview_ptr->m, optr->vertex_table[fptr->vertex_ind_table[1]]);
+    mxv(&p3, mmodelview_ptr->m, optr->vertex_table[fptr->vertex_ind_table[2]]);
+    printf("done\n");
 
     // Si la camara esta en perspectiva, aplicar (Mp * Mcsr * Mobj * Obj)
     if (tipo_camara == CAMARA_PERSPECTIVA)
@@ -650,9 +665,9 @@ void dibujar_triangulo(triobj *optr, int i)
         if (dibujar_normales == 1)
         {
 
-            p2_vnormal.x = tptr->p1.x + tptr->v_normal.x * 40;
-            p2_vnormal.y = tptr->p1.y + tptr->v_normal.y * 40;
-            p2_vnormal.z = tptr->p1.z + tptr->v_normal.z * 40;
+            p2_vnormal.x = optr->vertex_table[fptr->vertex_ind_table[0]].coord.x + fptr->N[0] * 40;
+            p2_vnormal.y = optr->vertex_table[fptr->vertex_ind_table[0]].coord.y + fptr->N[1] * 40;
+            p2_vnormal.z = optr->vertex_table[fptr->vertex_ind_table[0]].coord.z + fptr->N[2] * 40;
             p2_vnormal.u = 0;
             p2_vnormal.v = 0;
 
@@ -733,7 +748,7 @@ void dibujar_triangulo(triobj *optr, int i)
             pcorte2 = p3;
         }
 
-        dibujar_linea(pcorte1, pcorte2, optr->color);
+        dibujar_linea(pcorte1, pcorte2, optr->rgb);
         return;
     }
 
@@ -767,7 +782,7 @@ void dibujar_triangulo(triobj *optr, int i)
         pcorte2.u = s * pgoiptr->u + (1 - s) * pbeheptr->u;
         pcorte2.v = s * pgoiptr->v + (1 - s) * pbeheptr->v;
 
-        dibujar_linea(pcorte1, pcorte2, optr->color);
+        dibujar_linea(pcorte1, pcorte2, optr->rgb);
     }
 
     // Tenemos que sumarle para cancelar el cambio de mas que ha hecho en la ultima iteracion.
@@ -804,7 +819,7 @@ void dibujar_triangulo(triobj *optr, int i)
         pcorte2.u = s * pgoiptr->u + (1 - s) * pbeheptr->u;
         pcorte2.v = s * pgoiptr->v + (1 - s) * pbeheptr->v;
 
-        dibujar_linea(pcorte1, pcorte2, optr->color);
+        dibujar_linea(pcorte1, pcorte2, optr->rgb);
     }
 }
 
@@ -816,7 +831,7 @@ static void marraztu(void)
     mlist mmodelview;
     mlist mperspectiva;
     mlist mtemp;
-    triobj *auxptr;
+    object3d *auxptr;
     /*
     unsigned char* colorv;
     unsigned char r,g,b;
@@ -861,7 +876,7 @@ static void marraztu(void)
         calcular_mcsr(mcsr_ptr, obj_ptr->mptr->m);
     }
 
-    triangulosptr = (*sel_ptr)->triptr;
+    // triangulosptr = (*sel_ptr)->triptr;
     if (objektuak == 1)
     {
         if (denak == 1)
@@ -869,7 +884,7 @@ static void marraztu(void)
             for (auxptr = objetosptr; auxptr != 0; auxptr = auxptr->hptr)
             {
                 calcular_mmodelview(mmodelview_ptr, mcsr_ptr->m, auxptr->mptr->m);
-                for (i = 0; i < auxptr->num_triangles; i++)
+                for (i = 0; i < auxptr->num_faces; i++)
                 {
                     dibujar_triangulo(auxptr, i);
                 }
@@ -878,7 +893,7 @@ static void marraztu(void)
             for (auxptr = camarasptr; auxptr != 0; auxptr = auxptr->hptr)
             {
                 calcular_mmodelview(mmodelview_ptr, mcsr_ptr->m, auxptr->mptr->m);
-                for (i = 0; i < auxptr->num_triangles; i++)
+                for (i = 0; i < auxptr->num_faces; i++)
                 {
                     dibujar_triangulo(auxptr, i);
                 }
@@ -889,7 +904,7 @@ static void marraztu(void)
         else
         {
             calcular_mmodelview(mmodelview_ptr, mcsr_ptr->m, (*sel_ptr)->mptr->m);
-            for (i = 0; i < (*sel_ptr)->num_triangles; i++)
+            for (i = 0; i < (*sel_ptr)->num_faces; i++)
             {
                 dibujar_triangulo((*sel_ptr), i);
             }
@@ -905,7 +920,7 @@ static void marraztu(void)
 void read_from_file(char *fitx, int tipo_lista)
 {
     int i, retval;
-    triobj *optr;
+    object3d *optr;
 
     cambiar_lista_activa(tipo_lista);
     // Se va a añadir el objeto nuevo a la lista que toca
@@ -915,16 +930,18 @@ void read_from_file(char *fitx, int tipo_lista)
     // a ver desde el objeto o al reves.
 
     // printf("%s fitxategitik datuak hartzera\n",fitx);
-    optr = (triobj *)malloc(sizeof(triobj));
-    retval = cargar_triangulos_color(fitx, &(optr->num_triangles), &(optr->triptr), &(optr->color));
+    optr = (object3d *)malloc(sizeof(object3d));
+    // retval = cargar_triangulos_color(fitx, &(optr->num_faces), &(optr->triptr), &(optr->color));
+    retval = read_wavefront(fitx, optr);
     if (retval == 1)
     {
         printf("%s fitxategitik datuak hartzerakoan arazoak izan ditut\n    Problemas al leer\n cod:%d\n", fitxiz, retval);
         free(optr);
+        exit(-1);
     }
     else
     {
-        triangulosptr = optr->triptr;
+        // triangulosptr = optr->triptr;
         // printf("objektuaren matrizea...\n");
         optr->mptr = (mlist *)malloc(sizeof(mlist));
         for (i = 0; i < 16; i++)
@@ -940,7 +957,7 @@ void read_from_file(char *fitx, int tipo_lista)
         (*foptr) = optr;       // foptr(cambiado a un ptrptr que apunta dependiendo de la lista) apunta al primer objeto ( el ultimo cargado )
         (*sel_ptr) = optr;
         if (retval == 9)
-            printf("COLOR (%d,%d,%d)\n", optr->color[0], optr->color[1], optr->color[2]);
+            printf("COLOR (%d,%d,%d)\n", optr->rgb.r, optr->rgb.g, optr->rgb.b);
     }
     printf("datuak irakurrita\nLecura finalizada\n");
 }
@@ -1025,7 +1042,7 @@ void rotacion(mlist *matriz_transformacion, int eje, int dir, double angulo)
     matriz_transformacion->m[15] = 1;
 }
 
-void rotacion_respecto_punto(mlist *matriz_transformacion, triobj *pA, int eje, int dir, double angulo)
+void rotacion_respecto_punto(mlist *matriz_transformacion, object3d *pA, int eje, int dir, double angulo)
 {
     int i;
     float angulo_x_dir;
@@ -1295,7 +1312,7 @@ static void teklatua(unsigned char key, int x, int y)
         {
             indexx++; // azkena bada lehenengoa bihurtu
                       // pero si es el último? hay que controlarlo!
-            if (indexx == (*sel_ptr)->num_triangles)
+            if (indexx == (*sel_ptr)->num_faces)
             {
                 indexx = 0;
                 if ((denak == 1) && (objektuak == 0))
@@ -1537,19 +1554,19 @@ int main(int argc, char **argv)
         read_from_file(argv[1], LISTA_OBJETOS);
     else
     {
-        read_from_file("z.txt", LISTA_OBJETOS);
+        read_from_file("box.obj", LISTA_OBJETOS);
         translacion(&matriz_transformacion, EJE_X, DIR_ATRAS, 240);
         aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
 
-        read_from_file("k.txt", LISTA_OBJETOS);
+        read_from_file("box.obj", LISTA_OBJETOS);
         translacion(&matriz_transformacion, EJE_Y, DIR_ATRAS, 20);
         aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
 
-        read_from_file("logoehu_planoa.txt", LISTA_OBJETOS);
+        read_from_file("box.obj", LISTA_OBJETOS);
         translacion(&matriz_transformacion, EJE_X, DIR_ADELANTE, 370);
         aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
 
-        read_from_file("k.txt", LISTA_OBJETOS);
+        read_from_file("box.obj", LISTA_OBJETOS);
         translacion(&matriz_transformacion, EJE_Z, DIR_ADELANTE, 200);
         translacion(&matriz_transformacion, EJE_X, DIR_ADELANTE, 200);
         aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
