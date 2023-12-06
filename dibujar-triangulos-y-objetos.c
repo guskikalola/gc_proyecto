@@ -575,7 +575,7 @@ int es_visible(triobj *optr, int i)
 
     if (tipo_camara == CAMARA_PERSPECTIVA)
     {
-        double v[3] = {matriz_observador.m[3], matriz_observador.m[7], matriz_observador.m[11]};  // observador - punto (0,0,0)
+        double v[3] = {matriz_observador.m[3] - tptr->p1.x, matriz_observador.m[7] - tptr->p1.y, matriz_observador.m[11] - tptr->p1.z};  // observador
         double v_n = v[0] * tptr->v_normal.x + v[1] * tptr->v_normal.y + v[2] * tptr->v_normal.z; // v * n
         return v_n > 0;
     }
