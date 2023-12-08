@@ -106,7 +106,6 @@ int ultimo_es_visible;
 int dibujar_no_visible;
 int dibujar_normales;
 
-// TODO
 // funtzio honek u eta v koordenatuei dagokien pointerra itzuli behar du.
 // debe devolver el pointer correspondiente a las coordenadas u y v
 unsigned char *color_textura(float u, float v)
@@ -430,8 +429,6 @@ int aplicar_mperspectiva(punto *pptr, double m[16])
     // printf(" 2 pptr->x %f\n", pptr->z);
 }
 
-// TODO: si miras a un objeto en tu misma pos va a dar error, siendo los resultados nan
-// Arreglo temporal: Poner la identidad en los vectores
 void look_at(triobj *observadorptr, triobj *objetivoptr)
 {
     int i;
@@ -1526,7 +1523,6 @@ int main(int argc, char **argv)
     dibujar_no_visible = 1;
     dibujar_normales = 1;
 
-    // TODO: Temporal, cargar una camara como un objeto. Buscar otra manera mas simple
     read_from_file("camara.txt", LISTA_CAMARAS);
     camara_ptr = (*sel_ptr);
 
