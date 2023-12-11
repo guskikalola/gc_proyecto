@@ -22,7 +22,7 @@
 #define DISTANCIA_MINIMA_ANALISIS 30
 
 #define CAMARA_CONFIG_NEAR 5.0
-#define CAMARA_CONFIG_FAR 500.0
+#define CAMARA_CONFIG_FAR 1000.0
 #define CAMARA_CONFIG_LEFT -5.0
 #define CAMARA_CONFIG_RIGHT 5.0
 #define CAMARA_CONFIG_TOP 5.0
@@ -1233,9 +1233,12 @@ void tratar_transformacion_modo_analisis(int eje, int dir)
         sistema_ref = SISTEMA_LOCAL;
         break;
     case ROTACION:
-        if (eje != EJE_X && eje != EJE_Y)
+        if (eje == EJE_X)
+            rotacion_respecto_punto(&matriz_transformacion, obj_ptr, EJE_Y, dir, ANGULO_ROTACION);
+        else if (eje == EJE_Y)
+            rotacion_respecto_punto(&matriz_transformacion, obj_ptr, EJE_X, dir, ANGULO_ROTACION);
+        else
             return;
-        rotacion_respecto_punto(&matriz_transformacion, obj_ptr, eje, dir, ANGULO_ROTACION);
         sistema_ref = SISTEMA_MUNDO;
         break;
     default:
