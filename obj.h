@@ -57,8 +57,8 @@ typedef struct light
 int onoff;
 int type;      // 0 -> directional, 1 -> positional, 2 -> spot light
 color3 I;
-double pos[3];    // positional or spot light
-double campos[3];
+//double pos[3];    // positional or spot light
+//double campos[3];
 double dir[3];   // directional or spot light
 double camdir[3];
 double aperture;   // cos(ang) if  0 --> any position is iluminated. 
@@ -111,6 +111,7 @@ struct object3d{
     color3 ks;
     int ns;
     struct object3d *hptr;              /* next element in the pile of objects */
+    light *lightptr; // 0 si no es una luz
 };
 
 typedef struct object3d object3d;
