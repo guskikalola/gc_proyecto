@@ -1573,7 +1573,7 @@ int main(int argc, char **argv)
     dibujar_normales = 1;
 
     // TODO: Temporal, cargar una camara como un objeto. Buscar otra manera mas simple
-    read_from_file("box.obj", LISTA_CAMARAS);
+    read_from_file("cam.obj", LISTA_CAMARAS);
     camara_ptr = (*sel_ptr);
 
     translacion(&matriz_transformacion, EJE_Z, DIR_ADELANTE, 300);
@@ -1583,15 +1583,15 @@ int main(int argc, char **argv)
         read_from_file(argv[1], LISTA_OBJETOS);
     else
     {
-        read_from_file("box.obj", LISTA_OBJETOS);
+        read_from_file("r_falke.obj", LISTA_OBJETOS);
         translacion(&matriz_transformacion, EJE_X, DIR_ATRAS, 240);
         aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
 
-        read_from_file("box.obj", LISTA_OBJETOS);
+        read_from_file("x_wing.obj", LISTA_OBJETOS);
         translacion(&matriz_transformacion, EJE_Y, DIR_ATRAS, 20);
         aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
 
-        read_from_file("box.obj", LISTA_OBJETOS);
+        read_from_file("cam.obj", LISTA_OBJETOS);
         translacion(&matriz_transformacion, EJE_X, DIR_ADELANTE, 370);
         aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
 
