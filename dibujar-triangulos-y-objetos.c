@@ -607,6 +607,9 @@ void dibujar_triangulo(object3d *optr, int i)
     punto p2_vnormal;
     punto p2_vnormal_transformado;
 
+    punto vertice;
+    punto vertice_transformado;
+
     float t, s;
     float cambiot, cambios;
 
@@ -701,9 +704,25 @@ void dibujar_triangulo(object3d *optr, int i)
                 p2_vnormal.v = 0;
 
                 mxp(&p2_vnormal_transformado, mmodelview_ptr->m, p2_vnormal);
+
+                vertice.x = optr->vertex_table[fptr->vertex_ind_table[i]].coord.x;
+                vertice.y = optr->vertex_table[fptr->vertex_ind_table[i]].coord.y;
+                vertice.z = optr->vertex_table[fptr->vertex_ind_table[i]].coord.z;
+                vertice.u = 0;
+                vertice.v = 0;
+
+
+                printf("vertice.x=%f vertice.y=%f vertice.z=%f \n", vertice.x, vertice.y, vertice.z);
+
+                mxp(&vertice_transformado, mmodelview_ptr->m, vertice);
+
+                printf("vertice_transformado.x=%f vertice_transformado.y=%f vertice_transformado.z=%f \n", vertice_transformado.x, vertice_transformado.y, vertice_transformado.z);
+
+
                 if (tipo_camara == CAMARA_PERSPECTIVA)
                 {
                     res_mpers_vnormal = aplicar_mperspectiva(&p2_vnormal_transformado, mperspectiva_ptr->m);
+                    res_mpers_vnormal = aplicar_mperspectiva(&vertice_transformado, mperspectiva_ptr->m);
                     // if (p2_vnormal_transformado.z < -1 || p2_vnormal_transformado.z >= 0)
                     //     res_mpers_vnormal = -1;
                 }
@@ -716,7 +735,7 @@ void dibujar_triangulo(object3d *optr, int i)
                 {
                     glBegin(GL_LINES);
                     glColor3ub(134,134,134);
-                    glVertex3d(p1.x, p1.y, p1.z);
+                    glVertex3d(vertice_transformado.x, vertice_transformado.y, vertice_transformado.z);
                     glVertex3d(p2_vnormal_transformado.x, p2_vnormal_transformado.y, p2_vnormal_transformado.z);
                     glEnd();
                 }

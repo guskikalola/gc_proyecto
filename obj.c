@@ -166,6 +166,7 @@ int read_wavefront(char *file_name, object3d *object_ptr)
     obj_file = fopen(file_name, "r");
     k = 0;
     j = 0;
+    indexx_face = 0;
 
     for (i = 0; i < num_vertices; i++)
         vertex_table[i].num_faces = 0;
@@ -191,53 +192,64 @@ int read_wavefront(char *file_name, object3d *object_ptr)
                 line_1[i - 2] = '\0';
                 num_vertices_face = sreadint2(line_1, values);
 
-                if (num_vertices_face == 4)
+                // if (num_vertices_face == 4)
+                // {
+                //     face_table[indexx_face].num_vertices = 3;
+                //     face_table[indexx_face + 1].num_vertices = 3;
+                //     // printf("f %d vertices\n",face_table[j].num_vertices);
+                //     face_table[indexx_face].vertex_ind_table = (int *)malloc(face_table[indexx_face].num_vertices * sizeof(int));
+                //     face_table[indexx_face + 1].vertex_ind_table = (int *)malloc(face_table[indexx_face + 1].num_vertices * sizeof(int));
+
+                //     face_table[indexx_face].vertex_ind_table[0] = values[0] - 1;
+                //     face_table[indexx_face].vertex_ind_table[1] = values[1] - 1;
+                //     face_table[indexx_face].vertex_ind_table[2] = values[2] - 1;
+
+                //     face_table[indexx_face + 1].vertex_ind_table[0] = values[0] - 1;
+                //     face_table[indexx_face + 1].vertex_ind_table[1] = values[2] - 1;
+                //     face_table[indexx_face + 1].vertex_ind_table[2] = values[3] - 1;
+
+                //     for (i = 0; i < face_table[indexx_face].num_vertices; i++)
+                //     {
+                //         // face_table[j].vertex_ind_table[i] = values[i] - 1;
+                //         // // printf(" %d ",values[i] - 1);
+                //         vertex_table[face_table[indexx_face].vertex_ind_table[i]].num_faces++;
+                //     }
+
+                //     for (i = 0; i < face_table[indexx_face + 1].num_vertices; i++)
+                //     {
+                //         // face_table[j].vertex_ind_table[i] = values[i] - 1;
+                //         // // printf(" %d ",values[i] - 1);
+                //         vertex_table[face_table[indexx_face + 1].vertex_ind_table[i]].num_faces++;
+                //     }
+
+                //     indexx_face += 2;
+                // }
+                // else // 3 (?)
+                // {
+
+                for (i = 2; i < num_vertices_face; i++)
                 {
-                    face_table[indexx_face].num_vertices = 3;
-                    face_table[indexx_face + 1].num_vertices = 3;
-                    // printf("f %d vertices\n",face_table[j].num_vertices);
+                    face_table[indexx_face].num_vertices = 3; // Vamos a divirlo en triangulos
+                    // V[i-2] V[i-1] V[0]
+
                     face_table[indexx_face].vertex_ind_table = (int *)malloc(face_table[indexx_face].num_vertices * sizeof(int));
-                    face_table[indexx_face + 1].vertex_ind_table = (int *)malloc(face_table[indexx_face + 1].num_vertices * sizeof(int));
+                    face_table[indexx_face].vertex_ind_table[0] = values[i-2] - 1;
+                    face_table[indexx_face].vertex_ind_table[1] = values[i-1] - 1;
+                    face_table[indexx_face].vertex_ind_table[2] = values[i] - 1;
 
-                    face_table[indexx_face].vertex_ind_table[0] = values[0] - 1;
-                    face_table[indexx_face].vertex_ind_table[1] = values[1] - 1;
-                    face_table[indexx_face].vertex_ind_table[2] = values[2] - 1;
-
-                    face_table[indexx_face + 1].vertex_ind_table[0] = values[0] - 1;
-                    face_table[indexx_face + 1].vertex_ind_table[1] = values[2] - 1;
-                    face_table[indexx_face + 1].vertex_ind_table[2] = values[3] - 1;
-
-                    for (i = 0; i < face_table[indexx_face].num_vertices; i++)
-                    {
-                        // face_table[j].vertex_ind_table[i] = values[i] - 1;
-                        // // printf(" %d ",values[i] - 1);
-                        vertex_table[face_table[indexx_face].vertex_ind_table[i]].num_faces++;
-                    }
-
-                    for (i = 0; i < face_table[indexx_face + 1].num_vertices; i++)
-                    {
-                        // face_table[j].vertex_ind_table[i] = values[i] - 1;
-                        // // printf(" %d ",values[i] - 1);
-                        vertex_table[face_table[indexx_face + 1].vertex_ind_table[i]].num_faces++;
-                    }
-
-                    indexx_face += 2;
-                }
-                else // 3 (?)
-                {
-                    face_table[indexx_face].num_vertices = num_vertices_face;
                     // printf("f %d vertices\n",face_table[j].num_vertices);
-                    face_table[indexx_face].vertex_ind_table = (int *)malloc(face_table[indexx_face].num_vertices * sizeof(int));
-                    for (i = 0; i < face_table[indexx_face].num_vertices; i++)
+                    for (j = 0; j < face_table[indexx_face].num_vertices; j++)
                     {
-                        face_table[indexx_face].vertex_ind_table[i] = values[i] - 1;
+                        // face_table[indexx_face].vertex_ind_table[j] = values[j] - 1;
                         // printf(" %d ",values[i] - 1);
-                        vertex_table[face_table[indexx_face].vertex_ind_table[i]].num_faces++;
+                        vertex_table[face_table[indexx_face].vertex_ind_table[j]].num_faces++;
                     }
 
                     indexx_face++;
-                    // printf("\n");
                 }
+
+                // printf("\n");
+                // }
 
                 j++;
             }
@@ -302,15 +314,15 @@ int read_wavefront(char *file_name, object3d *object_ptr)
         for (j = 0; j < fptr->num_vertices; j++)
         {
             vptr = object_ptr->vertex_table + j;
-            printf("----(S)-----\n");
-            printf("fptr->N[0] = %f, fptr->N[1] = %f, fptr->N[2] = %f\n", fptr->N[0], fptr->N[1], fptr->N[2]);
-            printf("vptr->N[0] = %f, vptr->N[1] = %f, vptr->N[2] = %f\n", vptr->N[0], vptr->N[1], vptr->N[2]);
+            // printf("----(S)-----\n");
+            // printf("fptr->N[0] = %f, fptr->N[1] = %f, fptr->N[2] = %f\n", fptr->N[0], fptr->N[1], fptr->N[2]);
+            // printf("vptr->N[0] = %f, vptr->N[1] = %f, vptr->N[2] = %f\n", vptr->N[0], vptr->N[1], vptr->N[2]);
             vptr->N[0] = vptr->N[0] + fptr->N[0];
             vptr->N[1] = vptr->N[1] + fptr->N[1];
             vptr->N[2] = vptr->N[2] + fptr->N[2];
-            printf("fptr->N[0] = %f, fptr->N[1] = %f, fptr->N[2] = %f\n", fptr->N[0], fptr->N[1], fptr->N[2]);
-            printf("vptr->N[0] = %f, vptr->N[1] = %f, vptr->N[2] = %f\n", vptr->N[0], vptr->N[1], vptr->N[2]);
-            printf("----(E)-----\n");
+            // printf("fptr->N[0] = %f, fptr->N[1] = %f, fptr->N[2] = %f\n", fptr->N[0], fptr->N[1], fptr->N[2]);
+            // printf("vptr->N[0] = %f, vptr->N[1] = %f, vptr->N[2] = %f\n", vptr->N[0], vptr->N[1], vptr->N[2]);
+            // printf("----(E)-----\n");
         }
     }
 
