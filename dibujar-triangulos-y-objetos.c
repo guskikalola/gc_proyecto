@@ -21,7 +21,7 @@
 #define DISTANCIA_MINIMA_ANALISIS 30
 
 #define CAMARA_CONFIG_NEAR 5.0
-#define CAMARA_CONFIG_FAR 500.0
+#define CAMARA_CONFIG_FAR 1000.0
 #define CAMARA_CONFIG_LEFT -5.0
 #define CAMARA_CONFIG_RIGHT 5.0
 #define CAMARA_CONFIG_TOP 5.0
@@ -146,9 +146,12 @@ void dibujar_linea(punto p1, punto p2, unsigned char *color)
     else
         cambioj = 1 / (pcortemayor->x - pcortemenor->x);
 
-    if(pcortemayor->x - pcortemenor->x > 1000) return;
-    if(abs(pcortemayor->y - pcortemenor->y) > 1000) return;
-    if(abs(pcortemayor->z - pcortemenor->z) > 1000) return;
+    if (pcortemayor->x - pcortemenor->x > 1000)
+        return;
+    if (abs(pcortemayor->y - pcortemenor->y) > 1000)
+        return;
+    if (abs(pcortemayor->z - pcortemenor->z) > 1000)
+        return;
 
     for (j = 1; j > 0; j -= cambioj)
     {
@@ -159,7 +162,8 @@ void dibujar_linea(punto p1, punto p2, unsigned char *color)
         pcalculado.v = j * pcortemayor->v + (1 - j) * pcortemenor->v;
 
         // TODO: Por ahora me vale para mejorar un poco el rendimiento
-        if(abs(pcalculado.x) > 500 || abs(pcalculado.y) > 500) continue;
+        if (abs(pcalculado.x) > 500 || abs(pcalculado.y) > 500)
+            continue;
 
         glBegin(GL_POINTS);
         if (ultimo_es_visible == 1)
@@ -572,8 +576,8 @@ int es_visible(triobj *optr, int i)
 
     if (tipo_camara == CAMARA_PERSPECTIVA)
     {
-        double v[3] = {matriz_observador.m[3] - tptr->p1.x, matriz_observador.m[7] - tptr->p1.y, matriz_observador.m[11] - tptr->p1.z};  // observador
-        double v_n = v[0] * tptr->v_normal.x + v[1] * tptr->v_normal.y + v[2] * tptr->v_normal.z; // v * n
+        double v[3] = {matriz_observador.m[3] - tptr->p1.x, matriz_observador.m[7] - tptr->p1.y, matriz_observador.m[11] - tptr->p1.z}; // observador
+        double v_n = v[0] * tptr->v_normal.x + v[1] * tptr->v_normal.y + v[2] * tptr->v_normal.z;                                       // v * n
         return v_n > 0;
     }
     else // CAMARA_PARALELA
@@ -624,7 +628,6 @@ void dibujar_triangulo(triobj *optr, int i)
             return;
         if (aplicar_mperspectiva(&p3, mperspectiva_ptr->m) != 0)
             return;
-
     }
 
     if (lineak == 1)
@@ -1184,9 +1187,12 @@ void tratar_transformacion_modo_analisis(int eje, int dir)
         sistema_ref = SISTEMA_LOCAL;
         break;
     case ROTACION:
-        if (eje != EJE_X && eje != EJE_Y)
+        if (eje == EJE_X)
+            rotacion_respecto_punto(&matriz_transformacion, obj_ptr, EJE_Y, dir, ANGULO_ROTACION);
+        else if (eje == EJE_Y)
+            rotacion_respecto_punto(&matriz_transformacion, obj_ptr, EJE_X, dir, ANGULO_ROTACION);
+        else
             return;
-        rotacion_respecto_punto(&matriz_transformacion, obj_ptr, eje, dir, ANGULO_ROTACION);
         sistema_ref = SISTEMA_MUNDO;
         break;
     default:
@@ -1526,7 +1532,7 @@ int main(int argc, char **argv)
     read_from_file("camara.txt", LISTA_CAMARAS);
     camara_ptr = (*sel_ptr);
 
-    translacion(&matriz_transformacion, EJE_Z, DIR_ADELANTE, 300);
+    translacion(&matriz_transformacion, EJE_Z, DIR_ADELANTE, 200);
     aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
 
     if (argc > 1)
