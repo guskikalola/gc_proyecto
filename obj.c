@@ -233,7 +233,7 @@ int read_wavefront(char *file_name, object3d *object_ptr)
                     // V[i-2] V[i-1] V[0]
 
                     face_table[indexx_face].vertex_ind_table = (int *)malloc(face_table[indexx_face].num_vertices * sizeof(int));
-                    face_table[indexx_face].vertex_ind_table[0] = values[i-2] - 1;
+                    face_table[indexx_face].vertex_ind_table[0] = values[0] - 1;
                     face_table[indexx_face].vertex_ind_table[1] = values[i-1] - 1;
                     face_table[indexx_face].vertex_ind_table[2] = values[i] - 1;
 
@@ -313,7 +313,7 @@ int read_wavefront(char *file_name, object3d *object_ptr)
         // Sumar normal de la cara a los vertices que usa
         for (j = 0; j < fptr->num_vertices; j++)
         {
-            vptr = object_ptr->vertex_table + j;
+            vptr = object_ptr->vertex_table + fptr->vertex_ind_table[j];
             // printf("----(S)-----\n");
             // printf("fptr->N[0] = %f, fptr->N[1] = %f, fptr->N[2] = %f\n", fptr->N[0], fptr->N[1], fptr->N[2]);
             // printf("vptr->N[0] = %f, vptr->N[1] = %f, vptr->N[2] = %f\n", vptr->N[0], vptr->N[1], vptr->N[2]);
@@ -337,7 +337,7 @@ int read_wavefront(char *file_name, object3d *object_ptr)
         vptr->N[1] = vptr->N[1] / mod_n;
         vptr->N[2] = vptr->N[2] / mod_n;
 
-        printf("mod_n=%f\n", mod_n);
+        // printf("mod_n=%f\n", mod_n);
     }
 
     return (0);

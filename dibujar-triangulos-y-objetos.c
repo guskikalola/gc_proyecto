@@ -667,9 +667,9 @@ void dibujar_triangulo(object3d *optr, int i)
         {
 
             // NORMALES DE LAS CARAS
-            p2_vnormal.x = optr->vertex_table[fptr->vertex_ind_table[0]].coord.x + fptr->N[0] * 20;
-            p2_vnormal.y = optr->vertex_table[fptr->vertex_ind_table[0]].coord.y + fptr->N[1] * 20;
-            p2_vnormal.z = optr->vertex_table[fptr->vertex_ind_table[0]].coord.z + fptr->N[2] * 20;
+            p2_vnormal.x = optr->vertex_table[fptr->vertex_ind_table[0]].coord.x + fptr->N[0] * 5;
+            p2_vnormal.y = optr->vertex_table[fptr->vertex_ind_table[0]].coord.y + fptr->N[1] * 5;
+            p2_vnormal.z = optr->vertex_table[fptr->vertex_ind_table[0]].coord.z + fptr->N[2] * 5;
             p2_vnormal.u = 0;
             p2_vnormal.v = 0;
             mxp(&p2_vnormal_transformado, mmodelview_ptr->m, p2_vnormal);
@@ -697,11 +697,13 @@ void dibujar_triangulo(object3d *optr, int i)
             {
                 // printf("optr->vertex_table[fptr->vertex_ind_table[i]].coord.x=%f\n",optr->vertex_table[fptr->vertex_ind_table[i]].coord.x);
                 // printf("optr->vertex_table[fptr->vertex_ind_table[i]].N[0]=%f\n",optr->vertex_table[fptr->vertex_ind_table[i]].N[0]);
-                p2_vnormal.x = optr->vertex_table[fptr->vertex_ind_table[i]].coord.x + optr->vertex_table[fptr->vertex_ind_table[i]].N[0] * 3;
-                p2_vnormal.y = optr->vertex_table[fptr->vertex_ind_table[i]].coord.y + optr->vertex_table[fptr->vertex_ind_table[i]].N[1] * 3;
-                p2_vnormal.z = optr->vertex_table[fptr->vertex_ind_table[i]].coord.z + optr->vertex_table[fptr->vertex_ind_table[i]].N[2] * 3;
+                p2_vnormal.x = optr->vertex_table[fptr->vertex_ind_table[i]].coord.x + optr->vertex_table[fptr->vertex_ind_table[i]].N[0] * 5;
+                p2_vnormal.y = optr->vertex_table[fptr->vertex_ind_table[i]].coord.y + optr->vertex_table[fptr->vertex_ind_table[i]].N[1] * 5;
+                p2_vnormal.z = optr->vertex_table[fptr->vertex_ind_table[i]].coord.z + optr->vertex_table[fptr->vertex_ind_table[i]].N[2] * 5;
                 p2_vnormal.u = 0;
                 p2_vnormal.v = 0;
+
+                // printf("p2_vnormal (%f,%f,%f)\n",p2_vnormal.x,p2_vnormal.y,p2_vnormal.z);
 
                 mxp(&p2_vnormal_transformado, mmodelview_ptr->m, p2_vnormal);
 
@@ -711,13 +713,7 @@ void dibujar_triangulo(object3d *optr, int i)
                 vertice.u = 0;
                 vertice.v = 0;
 
-
-                printf("vertice.x=%f vertice.y=%f vertice.z=%f \n", vertice.x, vertice.y, vertice.z);
-
                 mxp(&vertice_transformado, mmodelview_ptr->m, vertice);
-
-                printf("vertice_transformado.x=%f vertice_transformado.y=%f vertice_transformado.z=%f \n", vertice_transformado.x, vertice_transformado.y, vertice_transformado.z);
-
 
                 if (tipo_camara == CAMARA_PERSPECTIVA)
                 {
