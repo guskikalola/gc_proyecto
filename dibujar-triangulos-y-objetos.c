@@ -45,13 +45,17 @@
 
 #define LISTA_OBJETOS 0
 #define LISTA_CAMARAS 1
-// #define LISTA_LUCES 2
+#define LISTA_LUCES 2
 
 #define CAMARA_PERSPECTIVA 0
 #define CAMARA_PARALELA 1
 
 #define CAMARA_MOD_VUELO 0
 #define CAMARA_MOD_ANALISIS 1
+
+#define LUZ_DIRECCIONAL 0
+#define LUZ_POSICIONAL 1
+#define LUZ_FOCO 2
 
 // typedef struct mlist
 // {
@@ -88,6 +92,9 @@ object3d *obj_ptr;    // Puntero al objeto seleccionado de la lista
 
 object3d *camarasptr; // Lista de camaras ( Apunta a la primera camara )
 object3d *camara_ptr; // Puntero a la camara seleccionada de la lista
+
+object3d *lucesptr; // Lista de luces ( Apunta a la primera luz )
+object3d *luz_ptr;  // Puntero a la luz seleccionada de la lista
 
 int lista_activa; // Indicador de la lista actualmente activa ( Camaras, objetos, ... ). Solo lectura
 
@@ -164,6 +171,9 @@ void dibujar_linea(punto p1, punto p2, color3 color)
         pcalculado.z = j * pcortemayor->z + (1 - j) * pcortemenor->z;
         pcalculado.u = j * pcortemayor->u + (1 - j) * pcortemenor->u;
         pcalculado.v = j * pcortemayor->v + (1 - j) * pcortemenor->v;
+        pcalculado.intesidad.r = j * pcortemayor->intesidad.r + (1 - j) * pcortemenor->intesidad.r;
+        pcalculado.intesidad.g = j * pcortemayor->intesidad.g + (1 - j) * pcortemenor->intesidad.g;
+        pcalculado.intesidad.b = j * pcortemayor->intesidad.b + (1 - j) * pcortemenor->intesidad.b;
 
         // TODO: Por ahora me vale para mejorar un poco el rendimiento
         if (abs(pcalculado.x) > 500 || abs(pcalculado.y) > 500)
@@ -172,9 +182,10 @@ void dibujar_linea(punto p1, punto p2, color3 color)
         glBegin(GL_POINTS);
         if (ultimo_es_visible == 1)
         {
-            r = color.r;
-            g = color.g;
-            b = color.b;
+            r = color.r * pcalculado.intesidad.r;
+            g = color.g * pcalculado.intesidad.g;
+            b = color.b * pcalculado.intesidad.b;
+            // printf("intensidad (%f,%f,%f) color (%f,%f,%f)\n", pcalculado.intesidad.r, pcalculado.intesidad.g, pcalculado.intesidad.b, color.r, color.g, color.b);
         }
         else
         {
@@ -230,8 +241,10 @@ void print_estado()
     printf("Lista activa (c): ");
     if (lista_activa == LISTA_CAMARAS)
         printf("CAMARAS\n");
-    else
+    else if (lista_activa == LISTA_OBJETOS)
         printf("OBJETOS\n");
+    else
+        printf("LUCES\n");
 
     printf("Dibujando caras traseras (b): ");
     if (dibujar_no_visible == 1)
@@ -259,11 +272,19 @@ void mxp(punto *pptr, double m[16], punto p)
 
 void mxv(punto *pptr, double m[16], vertex v)
 {
+    int i;
+
     pptr->x = m[0] * v.coord.x + m[1] * v.coord.y + m[2] * v.coord.z + m[3];
     pptr->y = m[4] * v.coord.x + m[5] * v.coord.y + m[6] * v.coord.z + m[7];
     pptr->z = m[8] * v.coord.x + m[9] * v.coord.y + m[10] * v.coord.z + m[11];
     pptr->u = v.u;
     pptr->v = v.v;
+    for (i = 0; i < 3; i++)
+        pptr->N[i] = v.N[i];
+
+    pptr->intesidad.r = v.intesidad.r;
+    pptr->intesidad.g = v.intesidad.g;
+    pptr->intesidad.b = v.intesidad.b;
 }
 
 void mxm(double mresptr[16], double mA[16], double mB[16])
@@ -438,6 +459,161 @@ int aplicar_mperspectiva(punto *pptr, double m[16])
     // printf(" 2 pptr->x %f\n", pptr->z);
 }
 
+// Calcula la intensidad para cada vertice del objeto
+void calcular_intesidad(object3d *objptr)
+{
+    int i;
+    vertex *vptr;
+
+    object3d *luzptr;
+    object3d *observadorptr;
+
+    punto pluz;
+    punto pluz_cam;
+
+    punto pvert_local;
+    punto pvert;
+    punto pvert_cam;
+
+    mlist mcsr_observador;
+
+    punto N_local;
+    punto N;
+    punto N_cam;
+
+    double I_a = 0; // Intesidad ambiental
+    double K_a = 0; // Coeficiente ambiental
+    double L[3];    // Vector a la luz
+    double I_i = 0; // Intensidad luz
+    double K_d = 0; // Coeficiente material
+    double H[3];    // Vector especular ( aproximacion )
+    double K_s = 0; // Coeficiente especular
+    double ns = 0;  // Factor especular
+
+    double NL; // N * L
+    double NH; // N * H
+
+    double V[3];  // V
+    double VL[3]; // V + L
+    double mod_vl;
+
+    double sum_luces_r = 0;
+    double sum_luces_g = 0;
+    double sum_luces_b = 0;
+
+    double sum_espec_r = 0;
+    double sum_espec_g = 0;
+    double sum_espec_b = 0;
+
+    double intensidad_ambiental_r = 0; // I_a * K_a
+    double intensidad_ambiental_g = 0; // I_a * K_a
+    double intensidad_ambiental_b = 0; // I_a * K_a
+
+    if (camara_activa == 1)
+        observadorptr = camara_ptr;
+    else
+        observadorptr = obj_ptr;
+
+    calcular_mcsr(&mcsr_observador, observadorptr->mptr->m);
+
+    // I = Ia * Ka + E (N*Li*Ii*Kd) + E ((N*H)^ns * Ii * Ks)
+    for (i = 0; i < objptr->num_vertices; i++)
+    {
+        sum_luces_r = 0;
+        sum_luces_g = 0;
+        sum_luces_b = 0;
+
+        sum_espec_r = 0;
+        sum_espec_g = 0;
+        sum_espec_b = 0;
+
+        vptr = &(objptr->vertex_table[i]);
+
+        // Calcular vector normal del vertice en el SR de la camara ( Solo afectan las rotaciones )
+        N_local.x = vptr->N[0];
+        N_local.y = vptr->N[1];
+        N_local.z = vptr->N[2];
+        mxp(&N, mmodelview_ptr->m, N_local); // SR Mundo
+        mxp(&N_cam, mcsr_observador.m, N);   // SR Camara
+
+        // Calcular posicion del vertice en el SR de la camara
+        pvert_local.x = vptr->coord.x;
+        pvert_local.y = vptr->coord.y;
+        pvert_local.z = vptr->coord.z;
+        mxp(&pvert, mmodelview_ptr->m, pvert_local); // SR Mundo
+        mxp(&pvert_cam, mcsr_observador.m, pvert);   // SR Camara
+
+        // Recorrer todas las luces   ---    E (N*Li*Ii*Kd)  +  E ((N*H)^ns * Ii * Ks)
+        for (luzptr = lucesptr; luzptr != 0; luzptr = luzptr->hptr)
+        {
+            if(luzptr->lightptr->onoff == 0)
+                continue;
+
+            // Calcular posicion de la luz en el SR de la camara ( le sumamos la pos de la luz dentro del obj, offset )
+            pluz.x = luzptr->mptr->m[3] + luzptr->lightptr->pos[0];
+            pluz.x = luzptr->mptr->m[7] + luzptr->lightptr->pos[1];
+            pluz.x = luzptr->mptr->m[11] + luzptr->lightptr->pos[2];
+
+            mxp(&pluz_cam, mcsr_observador.m, pluz); // SR Camara
+
+            // Calcular vector hacia la luz ( luz - vertice )  ---  L esta en el SR de la Camara
+            L[0] = pluz_cam.x - pvert_cam.x;
+            L[1] = pluz_cam.y - pvert_cam.y;
+            L[2] = pluz_cam.z - pvert_cam.z;
+
+            NL = N_cam.x * L[0] + N_cam.y * L[1] + -(N_cam.z * L[2]); // N * L
+            // printf("N_cam (%f,%f,%f) pluz_cam (%f,%f,%f)  pvert_cam (%f,%f,%f)\n",N_cam.x,N_cam.y,N_cam.z,pluz_cam.x,pluz_cam.y,pluz_cam.z,pvert_cam.x,pvert_cam.y,pvert_cam.z);
+
+            if (NL < 0)
+                NL = 0; // max ( 0, N*L )
+
+            // printf("NL = %f\n", NL);
+            sum_luces_r += NL * luzptr->lightptr->I.r * objptr->kd.r; // N*Li*Ii*Kd
+            sum_luces_g += NL * luzptr->lightptr->I.g * objptr->kd.g; // N*Li*Ii*Kd
+            sum_luces_g += NL * luzptr->lightptr->I.b * objptr->kd.b; // N*Li*Ii*Kd
+            // printf("sum_luces (%f,%f,%f)\n", sum_luces_r, sum_luces_g, sum_luces_b);
+
+            // Calcular vector especular, reflejo de L ---  H esta en el SR de la Camara
+
+            //                V es el vector del vertice a la camara ( camara - vertice )
+            V[0] = 0 - pvert_cam.x; // La pos de la camara en su S.R es (0,0,0)
+            V[1] = 0 - pvert_cam.y;
+            V[2] = 0 - pvert_cam.z;
+
+            VL[0] = V[0] + L[0];
+            VL[1] = V[1] + L[1];
+            VL[2] = V[2] + L[2];
+
+            mod_vl = sqrt(pow(VL[0], 2) + pow(VL[1], 2) + pow(VL[2], 2));
+            if (mod_vl == 0)
+            {
+                printf("mod_vl == 0\n");
+                mod_vl = 1;
+            }
+
+            H[0] = VL[0] / mod_vl;
+            H[1] = VL[1] / mod_vl;
+            H[2] = VL[2] / mod_vl;
+
+            NH = N_cam.x * H[0] + N_cam.y * H[1] + -(N_cam.z * H[2]); // N * H
+            // printf("N_cam (%f,%f,%f) pluz_cam (%f,%f,%f)  pvert_cam (%f,%f,%f)\n",N_cam.x,N_cam.y,N_cam.z,pluz_cam.x,pluz_cam.y,pluz_cam.z,pvert_cam.x,pvert_cam.y,pvert_cam.z);
+
+            if (NH < 0)
+                NH = 0; // max ( 0, N*L )
+
+            sum_espec_r += NH * luzptr->lightptr->I.r * objptr->ks.r; // ((N*H)^ns * Ii * Ks)
+            sum_espec_g += NH * luzptr->lightptr->I.g * objptr->ks.g; // ((N*H)^ns * Ii * Ks)
+            sum_espec_b += NH * luzptr->lightptr->I.b * objptr->ks.b; // ((N*H)^ns * Ii * Ks)
+        }
+
+        vptr->intesidad.r = intensidad_ambiental_r + sum_luces_r + sum_espec_r;
+
+        vptr->intesidad.g = intensidad_ambiental_g + sum_luces_g + sum_espec_g;
+
+        vptr->intesidad.b = intensidad_ambiental_b + sum_luces_b + sum_espec_b;
+    }
+}
+
 // TODO: si miras a un objeto en tu misma pos va a dar error, siendo los resultados nan
 // Arreglo temporal: Poner la identidad en los vectores
 void look_at(object3d *observadorptr, object3d *objetivoptr)
@@ -552,6 +728,11 @@ void cambiar_lista_activa(int lista)
         foptr = &camarasptr;
         nombre_lista = "LISTA_CAMARAS";
         break;
+    case LISTA_LUCES:
+        sel_ptr = &luz_ptr;
+        foptr = &lucesptr;
+        nombre_lista = "LISTA_LUCES";
+        break;
     }
 
     lista_activa = lista;
@@ -596,6 +777,25 @@ int es_visible(object3d *optr, int i)
         double v_n = matriz_observador.m[2] * fptr->N[0] + matriz_observador.m[6] * fptr->N[1] + matriz_observador.m[10] * fptr->N[2]; // vector_z_camara * n
         return v_n > 0;
     }
+}
+
+void crear_luz(object3d *objptr, int tipo, color3 I, double pos_x, double pos_y, double pos_z, double dir_x, double dir_y, double dir_z, double apertura)
+{
+    objptr->lightptr = (light *)malloc(sizeof(light));
+
+    objptr->lightptr->onoff = 1;
+    objptr->lightptr->type = tipo;
+    objptr->lightptr->I = I;
+
+    objptr->lightptr->pos[0] = pos_x;
+    objptr->lightptr->pos[1] = pos_y;
+    objptr->lightptr->pos[2] = pos_z;
+
+    objptr->lightptr->dir[0] = dir_x;
+    objptr->lightptr->dir[1] = dir_y;
+    objptr->lightptr->dir[2] = dir_z;
+
+    objptr->lightptr->aperture = apertura;
 }
 
 void dibujar_triangulo(object3d *optr, int i)
@@ -730,7 +930,7 @@ void dibujar_triangulo(object3d *optr, int i)
                 if (res_mpers_vnormal == 0)
                 {
                     glBegin(GL_LINES);
-                    glColor3ub(134,134,134);
+                    glColor3ub(134, 134, 134);
                     glVertex3d(vertice_transformado.x, vertice_transformado.y, vertice_transformado.z);
                     glVertex3d(p2_vnormal_transformado.x, p2_vnormal_transformado.y, p2_vnormal_transformado.z);
                     glEnd();
@@ -819,12 +1019,18 @@ void dibujar_triangulo(object3d *optr, int i)
         pcorte1.z = t * pgoiptr->z + (1 - t) * perdiptr->z;
         pcorte1.u = t * pgoiptr->u + (1 - t) * perdiptr->u;
         pcorte1.v = t * pgoiptr->v + (1 - t) * perdiptr->v;
+        pcorte1.intesidad.r = t * pgoiptr->intesidad.r + (1 - t) * perdiptr->intesidad.r;
+        pcorte1.intesidad.g = t * pgoiptr->intesidad.g + (1 - t) * perdiptr->intesidad.g;
+        pcorte1.intesidad.b = t * pgoiptr->intesidad.b + (1 - t) * perdiptr->intesidad.b;
 
         pcorte2.x = s * pgoiptr->x + (1 - s) * pbeheptr->x;
         pcorte2.y = s * pgoiptr->y + (1 - s) * pbeheptr->y;
         pcorte2.z = s * pgoiptr->z + (1 - s) * pbeheptr->z;
         pcorte2.u = s * pgoiptr->u + (1 - s) * pbeheptr->u;
         pcorte2.v = s * pgoiptr->v + (1 - s) * pbeheptr->v;
+        pcorte2.intesidad.r = s * pgoiptr->intesidad.r + (1 - s) * pbeheptr->intesidad.r;
+        pcorte2.intesidad.g = s * pgoiptr->intesidad.g + (1 - s) * pbeheptr->intesidad.g;
+        pcorte2.intesidad.b = s * pgoiptr->intesidad.b + (1 - s) * pbeheptr->intesidad.b;
 
         dibujar_linea(pcorte1, pcorte2, optr->rgb);
     }
@@ -856,12 +1062,18 @@ void dibujar_triangulo(object3d *optr, int i)
         pcorte1.z = t * perdiptr->z + (1 - t) * pbeheptr->z;
         pcorte1.u = t * perdiptr->u + (1 - t) * pbeheptr->u;
         pcorte1.v = t * perdiptr->v + (1 - t) * pbeheptr->v;
+        pcorte1.intesidad.r = t * perdiptr->intesidad.r + (1 - t) * pbeheptr->intesidad.r;
+        pcorte1.intesidad.g = t * perdiptr->intesidad.g + (1 - t) * pbeheptr->intesidad.g;
+        pcorte1.intesidad.b = t * perdiptr->intesidad.b + (1 - t) * pbeheptr->intesidad.b;
 
         pcorte2.x = s * pgoiptr->x + (1 - s) * pbeheptr->x;
         pcorte2.y = s * pgoiptr->y + (1 - s) * pbeheptr->y;
         pcorte2.z = s * pgoiptr->z + (1 - s) * pbeheptr->z;
         pcorte2.u = s * pgoiptr->u + (1 - s) * pbeheptr->u;
         pcorte2.v = s * pgoiptr->v + (1 - s) * pbeheptr->v;
+        pcorte2.intesidad.r = s * pgoiptr->intesidad.r + (1 - s) * pbeheptr->intesidad.r;
+        pcorte2.intesidad.g = s * pgoiptr->intesidad.g + (1 - s) * pbeheptr->intesidad.g;
+        pcorte2.intesidad.b = s * pgoiptr->intesidad.b + (1 - s) * pbeheptr->intesidad.b;
 
         dibujar_linea(pcorte1, pcorte2, optr->rgb);
     }
@@ -928,6 +1140,7 @@ static void marraztu(void)
             for (auxptr = objetosptr; auxptr != 0; auxptr = auxptr->hptr)
             {
                 calcular_mmodelview(mmodelview_ptr, mcsr_ptr->m, auxptr->mptr->m);
+                calcular_intesidad(auxptr);
                 for (i = 0; i < auxptr->num_faces; i++)
                 {
                     dibujar_triangulo(auxptr, i);
@@ -937,6 +1150,7 @@ static void marraztu(void)
             for (auxptr = camarasptr; auxptr != 0; auxptr = auxptr->hptr)
             {
                 calcular_mmodelview(mmodelview_ptr, mcsr_ptr->m, auxptr->mptr->m);
+                calcular_intesidad(auxptr);
                 for (i = 0; i < auxptr->num_faces; i++)
                 {
                     dibujar_triangulo(auxptr, i);
@@ -948,6 +1162,8 @@ static void marraztu(void)
         else
         {
             calcular_mmodelview(mmodelview_ptr, mcsr_ptr->m, (*sel_ptr)->mptr->m);
+            calcular_intesidad((*sel_ptr));
+
             for (i = 0; i < (*sel_ptr)->num_faces; i++)
             {
                 dibujar_triangulo((*sel_ptr), i);
@@ -1000,8 +1216,7 @@ void read_from_file(char *fitx, int tipo_lista)
         optr->hptr = (*foptr); // el siguiente al objeto es el que antes era el primero
         (*foptr) = optr;       // foptr(cambiado a un ptrptr que apunta dependiendo de la lista) apunta al primer objeto ( el ultimo cargado )
         (*sel_ptr) = optr;
-        if (retval == 9)
-            printf("COLOR (%d,%d,%d)\n", optr->rgb.r, optr->rgb.g, optr->rgb.b);
+        printf("COLOR (%f,%f,%f)\n", optr->rgb.r, optr->rgb.g, optr->rgb.b);
     }
     printf("datuak irakurrita\nLecura finalizada\n");
 }
@@ -1465,8 +1680,11 @@ static void teklatua(unsigned char key, int x, int y)
                 modo_camara = CAMARA_MOD_VUELO;
             }
         }
-        else if (camara_activa == 1)
+        else if (lista_activa == LISTA_OBJETOS && camara_activa == 1)
             cambiar_lista_activa(LISTA_CAMARAS);
+        // else if (camara_activa == 1)
+        //     cambiar_lista_activa(LISTA_LUCES);
+
         break;
     case 'C':
         if (camara_activa == 0)
@@ -1553,6 +1771,10 @@ int main(int argc, char **argv)
 {
     int retval;
     mlist matriz_transformacion;
+    color3 color_sol;
+    color_sol.r = 10;
+    color_sol.g = 25;
+    color_sol.b = 100;
 
     printf(" Triangeluak: barneko puntuak eta testura\n Triángulos con puntos internos y textura \n");
     printf("Press <ESC> to finish\n");
@@ -1590,12 +1812,18 @@ int main(int argc, char **argv)
     dibujar_no_visible = 1;
     dibujar_normales = 1;
 
-    // TODO: Temporal, cargar una camara como un objeto. Buscar otra manera mas simple
+    // Cargar una camara como un objeto. Buscar otra manera mas simple
     read_from_file("cam.obj", LISTA_CAMARAS);
     camara_ptr = (*sel_ptr);
 
     translacion(&matriz_transformacion, EJE_Z, DIR_ADELANTE, 300);
     aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
+
+    // Cargar SOL ( luz direccional )
+    read_from_file("cam.obj", LISTA_LUCES);
+    translacion(&matriz_transformacion, EJE_Y, DIR_ATRAS, 40);
+    aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
+    crear_luz((*sel_ptr), LUZ_DIRECCIONAL, color_sol, 0, 0, 0, 0, -1, 0, 0);
 
     if (argc > 1)
         read_from_file(argv[1], LISTA_OBJETOS);

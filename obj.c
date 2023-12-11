@@ -76,6 +76,8 @@ int read_wavefront(char *file_name, object3d *object_ptr)
     int r, g, b;
     int values[MAXLINE];
 
+    int tiene_color = 0;
+
     int num_vertices_face = 0;
     int indexx_face = 0;
 
@@ -115,6 +117,8 @@ int read_wavefront(char *file_name, object3d *object_ptr)
                     object_ptr->rgb.r = r;
                     object_ptr->rgb.g = g;
                     object_ptr->rgb.b = b;
+
+                    tiene_color = 1;
                 }
             }
             else
@@ -339,6 +343,19 @@ int read_wavefront(char *file_name, object3d *object_ptr)
 
         // printf("mod_n=%f\n", mod_n);
     }
+
+    // Materiales a mano
+
+    object_ptr->kd.r = 0.5;
+    object_ptr->kd.g = 0.5;
+    object_ptr->kd.b = 0.3;
+
+    if(tiene_color == 0)
+        {
+            object_ptr->rgb.r = 0;
+            object_ptr->rgb.g = 0;
+            object_ptr->rgb.b = 0;
+        }
 
     return (0);
 }

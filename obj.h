@@ -3,13 +3,25 @@
 
 /** STRUCTURES **/
 
+/**********************
+ * Estructura para guardar
+ * resultados del calculo de intensidad
+************************/
+
+typedef struct intensidad
+{
+    double r,g,b;
+} intensidad;
+
 /****************************
  * Structure to store the   *
  * coordinates and texture coordinates of 3D points *
  ****************************/
 typedef struct punto
 {
-float x, y, z, u,v;
+    float x, y, z, u,v;
+    double N[3];
+    intensidad intesidad;
 } punto;
 
 /****************************
@@ -57,14 +69,13 @@ typedef struct light
 int onoff;
 int type;      // 0 -> directional, 1 -> positional, 2 -> spot light
 color3 I;
-//double pos[3];    // positional or spot light
+double pos[3];    // positional or spot light
 //double campos[3];
 double dir[3];   // directional or spot light
 double camdir[3];
 double aperture;   // cos(ang) if  0 --> any position is iluminated. 
                    //   if (not 0) only the cone is iluminated.
 } light;
-
 
 /****************************
  * Structure to store       *
@@ -78,6 +89,8 @@ typedef struct {
     int num_faces;                    /* number of faces that share this vertex */
     double N[3];
     double Ncam[3];
+
+    intensidad intesidad;
 } vertex;
 
 /****************************
