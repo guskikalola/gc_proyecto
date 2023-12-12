@@ -138,6 +138,7 @@ struct object3d
     int ns;
     struct object3d *hptr; /* next element in the pile of objects */
     light *lightptr;       // 0 si no es una luz
+    struct object3d *child;
 };
 
 typedef struct object3d object3d;

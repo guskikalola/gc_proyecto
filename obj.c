@@ -313,9 +313,9 @@ int read_wavefront(char *file_name, object3d *object_ptr)
 
     if (tiene_color == 0)
     {
-        object_ptr->rgb.r = 0;
-        object_ptr->rgb.g = 0;
-        object_ptr->rgb.b = 0;
+        object_ptr->rgb.r = 153;
+        object_ptr->rgb.g = 153;
+        object_ptr->rgb.b = 102;
     }
 
     return (0);

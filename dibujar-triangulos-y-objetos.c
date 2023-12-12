@@ -59,6 +59,7 @@
 
 #define MATERIAL_BRONZE 0
 #define MATERIAL_CHROME 1
+#define MATERIAL_FLAT 2
 
 // testuraren informazioa
 // información de textura
@@ -172,10 +173,14 @@ void dibujar_linea(vertex p1, vertex p2, color3 color)
         glBegin(GL_POINTS);
         if (ultimo_es_visible == 1)
         {
-            r = pcalculado.intesidad.r;
-            g = pcalculado.intesidad.g;
-            b = pcalculado.intesidad.b;
+            r = pcalculado.intesidad.r + 0.001; //* color.r;
+            g = pcalculado.intesidad.g + 0.001; //* color.g;
+            b = pcalculado.intesidad.b + 0.001; //* color.b;
+            // r = 255;
+            // g = 46;
+            // b = 143;
             // printf("intensidad (%f,%f,%f) color (%f,%f,%f)\n", pcalculado.intesidad.r, pcalculado.intesidad.g, pcalculado.intesidad.b, color.r, color.g, color.b);
+            // printf("rgb (%f,%f,%f)\n", r, g, b);
         }
         else
         {
@@ -183,7 +188,7 @@ void dibujar_linea(vertex p1, vertex p2, color3 color)
             g = 0;
             b = 0;
         }
-        glColor3d(r, g, b);
+        glColor3d(r / 255, g / 255, b / 255);
         glVertex3f(pcalculado.coord.x, pcalculado.coord.y, pcalculado.coord.z);
         glEnd();
     }
@@ -256,6 +261,15 @@ void mxp(punto *pptr, double m[16], punto p)
     pptr->x = m[0] * p.x + m[1] * p.y + m[2] * p.z + m[3];
     pptr->y = m[4] * p.x + m[5] * p.y + m[6] * p.z + m[7];
     pptr->z = m[8] * p.x + m[9] * p.y + m[10] * p.z + m[11];
+    pptr->u = p.u;
+    pptr->v = p.v;
+}
+
+void mxvec(punto *pptr, double m[16], punto p)
+{
+    pptr->x = m[0] * p.x + m[1] * p.y + m[2] * p.z;
+    pptr->y = m[4] * p.x + m[5] * p.y + m[6] * p.z;
+    pptr->z = m[8] * p.x + m[9] * p.y + m[10] * p.z;
     pptr->u = p.u;
     pptr->v = p.v;
 }
@@ -474,11 +488,13 @@ void calcular_intesidad(object3d *objptr)
     punto pluz_cam;
 
     punto pvert_local;
+    punto pvert;
     punto pvert_cam;
 
     mlist mcsr_observador;
 
     punto N_local;
+    punto N;
     punto N_cam;
 
     punto dir_local;
@@ -537,16 +553,21 @@ void calcular_intesidad(object3d *objptr)
         // Calcular vector normal del vertice en el SR de la camara ( Solo afectan las rotaciones )
         N_local.x = vptr->N[0];
         N_local.y = vptr->N[1];
-        N_local.z = vptr->N[2];                  // SR Local ( objeto )
-        mxp(&N_cam, mmodelview_ptr->m, N_local); // SR Camara
-        // printf("N_local (%f,%f,%f)\n",N_local.x,N_local.y,N_local.z);
-        // printf("N_cam (%f,%f,%f)\n",N_cam.x,N_cam.y,N_cam.z);
+        N_local.z = vptr->N[2];              // SR Local ( objeto )
+        mxvec(&N, objptr->mptr->m, N_local); // SR Mundo
+        mxvec(&N_cam, mcsr_observador.m, N); // SR Camara
+                                             // printf("N_local (%f,%f,%f)\n",N_local.x,N_local.y,N_local.z);
+                                             // printf("N_cam (%f,%f,%f)\n",N_cam.x,N_cam.y,N_cam.z);
+        normalizar_p(&N_cam);
+
+        if(isnan(N_cam.x)) continue;
 
         // Calcular posicion del vertice en el SR de la camara
         pvert_local.x = vptr->coord.x;
         pvert_local.y = vptr->coord.y;
-        pvert_local.z = vptr->coord.z;                   // SR Local ( objeto )
-        mxp(&pvert_cam, mmodelview_ptr->m, pvert_local); // SR Camara
+        pvert_local.z = vptr->coord.z;             // SR Local ( objeto )
+        mxp(&pvert, objptr->mptr->m, pvert_local); // SR Mundo
+        mxp(&pvert_cam, mcsr_observador.m, pvert); // SR Camara
 
         // Recorrer todas las luces   ---    E (N*Li*Ii*Kd)  +  E ((N*H)^ns * Ii * Ks)
         for (luzptr = lucesptr; luzptr != 0; luzptr = luzptr->hptr)
@@ -577,15 +598,17 @@ void calcular_intesidad(object3d *objptr)
                 if (NL < 0)
                     NL = 0; // max ( 0, N*L )
 
-                if (luzptr->lightptr->type == LUZ_FOCO)
+                if (luzptr->lightptr->type == LUZ_FOCO && NL > 0)
                 {
                     // Calcular direccion en el sistema de referencia de la camara
                     dir_local.x = luzptr->lightptr->dir[0];
                     dir_local.y = luzptr->lightptr->dir[1];
                     dir_local.z = luzptr->lightptr->dir[2]; // SR Local ( Luz )
 
-                    mxp(&dir, luzptr->mptr->m, dir_local); // SR Mundo
-                    mxp(&dir_cam, mcsr_observador.m, dir); // SR Camara
+                    mxvec(&dir, luzptr->mptr->m, dir_local); // SR Mundo
+                    mxvec(&dir_cam, mcsr_observador.m, dir); // SR Camara
+
+                    normalizar_p(&dir_cam);
 
                     FL = -dir_local.x * L[0] + -dir_local.y * L[1] + -dir_local.z * L[2];
 
@@ -601,21 +624,17 @@ void calcular_intesidad(object3d *objptr)
                 dir_local.y = luzptr->lightptr->dir[1];
                 dir_local.z = luzptr->lightptr->dir[2]; // SR Local ( Luz )
 
-                mxp(&dir, luzptr->mptr->m, dir_local); // SR Mundo
-                mxp(&dir_cam, mcsr_observador.m, dir); // SR Camara
-                normalizar_p(&dir_cam);
-                printf("dir_cam (%f,%f,%f)\n", dir_cam.x, dir_cam.y, dir_cam.z);
-                printf("N_cam (%f,%f,%f)\n", N_cam.x, N_cam.y, N_cam.z);
+                mxvec(&dir, luzptr->mptr->m, dir_local); // SR Mundo
+                mxvec(&dir_cam, mcsr_observador.m, dir); // SR Camara
 
                 normalizar_p(&dir_cam);
-                normalizar_p(&N_cam);
-
 
                 NL = N_cam.x * dir_cam.x + N_cam.y * dir_cam.y + N_cam.z * dir_cam.z; // N * L
-                printf("NL=%f\n",NL);
 
                 if (NL < 0)
                     NL = 0; // max ( 0, N*L )
+                // printf("dir_cam (%f,%f,%f)\n", dir_cam.x, dir_cam.y, dir_cam.z);
+                // printf("N_cam (%f,%f,%f)\n", N_cam.x, N_cam.y, N_cam.z);
             }
 
             // printf("NL = %f\n", NL);
@@ -661,10 +680,10 @@ void calcular_intesidad(object3d *objptr)
         sum_luces_r = 0;
         sum_luces_g = 0;
         sum_luces_b = 0;
-        */
         sum_espec_r = 0;
         sum_espec_g = 0;
         sum_espec_b = 0;
+        */
 
         vptr->intesidad.r = intensidad_ambiental_r + sum_luces_r + sum_espec_r;
 
@@ -1494,23 +1513,29 @@ void escalado(mlist *matriz_transformacion, int dir, float proporcion)
     }
 }
 
-void aplicar_transformacion(mlist *matriz_transformacionptr, int sistema_referencia)
+void aplicar_transformacion(object3d *objptr, mlist *matriz_transformacionptr, int sistema_referencia)
 {
     mlist *nueva_matrizptr = (mlist *)malloc(sizeof(mlist));
 
     if (sistema_referencia == SISTEMA_LOCAL)
     {
         // Multiplicar por la derecha
-        mxm(nueva_matrizptr->m, (*sel_ptr)->mptr->m, matriz_transformacionptr->m);
+        mxm(nueva_matrizptr->m, objptr->mptr->m, matriz_transformacionptr->m);
     }
     else // SISTEMA_MUNDO
     {
         // Multiplicar por la izquierda
-        mxm(nueva_matrizptr->m, matriz_transformacionptr->m, (*sel_ptr)->mptr->m);
+        mxm(nueva_matrizptr->m, matriz_transformacionptr->m, objptr->mptr->m);
     }
 
-    nueva_matrizptr->hptr = (*sel_ptr)->mptr;
-    (*sel_ptr)->mptr = nueva_matrizptr;
+    nueva_matrizptr->hptr = objptr->mptr;
+    objptr->mptr = nueva_matrizptr;
+
+    // if ((*sel_ptr)->child != 0) // Tiene hijo, aplicar misma transformacion
+    // {
+    //     nueva_matrizptr->hptr = (*sel_ptr)->mptr;
+    //     (*sel_ptr)->mptr = nueva_matrizptr;
+    // }
 }
 
 // Hace que la camara no pueda estar a menos de X distancia del objetivo
@@ -1528,7 +1553,7 @@ void ajustar_distancia_analisis()
     {
 
         translacion(&matriz_transformacion, EJE_Z, DIR_ADELANTE, (DISTANCIA_MINIMA_ANALISIS - distancia));
-        aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
+        aplicar_transformacion((*sel_ptr), &matriz_transformacion, SISTEMA_LOCAL);
     }
 
     // printf("DISTANCIA:%f\n", distancia);
@@ -1565,7 +1590,7 @@ void tratar_transformacion_modo_analisis(int eje, int dir)
         return;
     }
 
-    aplicar_transformacion(&matriz_transformacion, sistema_ref);
+    aplicar_transformacion((*sel_ptr), &matriz_transformacion, sistema_ref);
     // print_matrizea2("Mcam:\n", camara_ptr->mptr);
     // print_matrizea2("Mobj:\n", obj_ptr->mptr);
     ajustar_distancia_analisis();
@@ -1605,9 +1630,9 @@ void tratar_transformacion(int eje, int dir)
     // Las transformaciones a las camaras siempre se hacen en el sistema local,
     // independientemente del sistema de referencia activo
     if (lista_activa == LISTA_CAMARAS)
-        aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL); // La camara siempre en sis.local
+        aplicar_transformacion((*sel_ptr), &matriz_transformacion, SISTEMA_LOCAL); // La camara siempre en sis.local
     else
-        aplicar_transformacion(&matriz_transformacion, ald_lokala);
+        aplicar_transformacion((*sel_ptr), &matriz_transformacion, ald_lokala);
 
     print_estado();
 }
@@ -1935,6 +1960,22 @@ void inicializar_materiales()
     chrome->Ks.b = 0.774597;
 
     materiales[1] = *chrome;
+
+    material *flat = (material *)malloc(sizeof(material));
+
+    flat->Ka.r = 0;
+    flat->Ka.g = 0;
+    flat->Ka.b = 0;
+
+    flat->Kd.r = 1;
+    flat->Kd.g = 1;
+    flat->Kd.b = 1;
+
+    flat->Ks.r = 0;
+    flat->Ks.g = 0;
+    flat->Ks.b = 0;
+
+    materiales[2] = *flat;
 }
 
 int main(int argc, char **argv)
@@ -1942,9 +1983,19 @@ int main(int argc, char **argv)
     int retval;
     mlist matriz_transformacion;
     color3 color_sol;
-    color_sol.r = 0;
-    color_sol.g = 0;
-    color_sol.b = 100;
+    color_sol.r = 255;
+    color_sol.g = 255;
+    color_sol.b = 51;
+
+    color3 color_bombilla;
+    color_bombilla.r = 204;
+    color_bombilla.g = 255;
+    color_bombilla.b = 51;
+
+    color3 color_foco;
+    color_foco.r = 153;
+    color_foco.g = 255;
+    color_foco.b = 255;
 
     printf(" Triangeluak: barneko puntuak eta testura\n Triángulos con puntos internos y textura \n");
     printf("Press <ESC> to finish\n");
@@ -1990,35 +2041,36 @@ int main(int argc, char **argv)
     camara_ptr = (*sel_ptr);
 
     translacion(&matriz_transformacion, EJE_Z, DIR_ADELANTE, 300);
-    aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
+    aplicar_transformacion((*sel_ptr), &matriz_transformacion, SISTEMA_LOCAL);
 
     // ------- Configurar luces
     // Configurar luz ambiental
-    luz_ambiental.I.r = 0.2;
-    luz_ambiental.I.g = 0.2;
-    luz_ambiental.I.b = 0.2;
+    luz_ambiental.I.r = 20;
+    luz_ambiental.I.g = 20;
+    luz_ambiental.I.b = 20;
 
     // Cargar SOL ( luz direccional )
     read_from_file("sun.obj", LISTA_LUCES);
     (*sel_ptr)->mat = &(materiales[MATERIAL_BRONZE]);
     translacion(&matriz_transformacion, EJE_Y, DIR_ADELANTE, 300);
-    aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
+    aplicar_transformacion((*sel_ptr), &matriz_transformacion, SISTEMA_LOCAL);
     escalado(&matriz_transformacion, DIR_ADELANTE, PROPORCION_ESCALADO * 10);
-    aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
+    aplicar_transformacion((*sel_ptr), &matriz_transformacion, SISTEMA_LOCAL);
     crear_luz((*sel_ptr), LUZ_DIRECCIONAL, color_sol, 0, 0, 0, 0, 1, 0, 0);
 
     // Cargar Bombilla ( luz posicional )
     read_from_file("cam.obj", LISTA_LUCES);
     (*sel_ptr)->mat = &(materiales[MATERIAL_BRONZE]);
     translacion(&matriz_transformacion, EJE_Y, DIR_ATRAS, 40);
-    aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
-    crear_luz((*sel_ptr), LUZ_POSICIONAL, color_sol, 0, 0, 0, 0, 0, 0, 0);
+    aplicar_transformacion((*sel_ptr), &matriz_transformacion, SISTEMA_LOCAL);
+    crear_luz((*sel_ptr), LUZ_POSICIONAL, color_bombilla, 0, 0, 0, 0, 0, 0, 0);
 
+    // Cargar Foco ( luz foco )
     read_from_file("cam.obj", LISTA_LUCES);
     (*sel_ptr)->mat = &(materiales[MATERIAL_BRONZE]);
     translacion(&matriz_transformacion, EJE_Y, DIR_ATRAS, 40);
-    aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
-    crear_luz((*sel_ptr), LUZ_FOCO, color_sol, 0, 0, 0, 0, 0, 0, cos(30));
+    aplicar_transformacion((*sel_ptr), &matriz_transformacion, SISTEMA_LOCAL);
+    crear_luz((*sel_ptr), LUZ_FOCO, color_foco, 0, 0, 0, 0, 0, 0, cos(30));
 
     if (argc > 1)
     {
@@ -2030,23 +2082,28 @@ int main(int argc, char **argv)
         read_from_file("r_falke.obj", LISTA_OBJETOS);
         (*sel_ptr)->mat = &(materiales[MATERIAL_BRONZE]);
         translacion(&matriz_transformacion, EJE_X, DIR_ATRAS, 240);
-        aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
+        aplicar_transformacion((*sel_ptr), &matriz_transformacion, SISTEMA_LOCAL);
 
         read_from_file("x_wing.obj", LISTA_OBJETOS);
-        (*sel_ptr)->mat = &(materiales[MATERIAL_CHROME]);
-        translacion(&matriz_transformacion, EJE_Y, DIR_ATRAS, 20);
-        aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
-
-        read_from_file("cam.obj", LISTA_OBJETOS);
-        (*sel_ptr)->mat = &(materiales[MATERIAL_CHROME]);
-        translacion(&matriz_transformacion, EJE_X, DIR_ADELANTE, 370);
-        aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
+        (*sel_ptr)->mat = &(materiales[MATERIAL_FLAT]);
+        translacion(&matriz_transformacion, EJE_X, DIR_ADELANTE, 240);
+        aplicar_transformacion((*sel_ptr), &matriz_transformacion, SISTEMA_LOCAL);
 
         read_from_file("box.obj", LISTA_OBJETOS);
-        (*sel_ptr)->mat = &(materiales[MATERIAL_BRONZE]);
-        translacion(&matriz_transformacion, EJE_Z, DIR_ADELANTE, 200);
-        translacion(&matriz_transformacion, EJE_X, DIR_ADELANTE, 200);
-        aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
+        (*sel_ptr)->mat = &(materiales[MATERIAL_CHROME]);
+        escalado(&matriz_transformacion, DIR_ADELANTE, PROPORCION_ESCALADO * 20);
+        aplicar_transformacion((*sel_ptr), &matriz_transformacion, SISTEMA_LOCAL);
+
+        // read_from_file("cam.obj", LISTA_OBJETOS);
+        // (*sel_ptr)->mat = &(materiales[MATERIAL_CHROME]);
+        // translacion(&matriz_transformacion, EJE_X, DIR_ADELANTE, 370);
+        // aplicar_transformacion((*sel_ptr),&matriz_transformacion, SISTEMA_LOCAL);
+
+        // read_from_file("box.obj", LISTA_OBJETOS);
+        // (*sel_ptr)->mat = &(materiales[MATERIAL_BRONZE]);
+        // translacion(&matriz_transformacion, EJE_Z, DIR_ADELANTE, 200);
+        // translacion(&matriz_transformacion, EJE_X, DIR_ADELANTE, 200);
+        // aplicar_transformacion((*sel_ptr),&matriz_transformacion, SISTEMA_LOCAL);
     }
 
     mperspectiva_ptr = (mlist *)malloc(sizeof(mlist));
