@@ -57,6 +57,9 @@
 #define LUZ_POSICIONAL 1
 #define LUZ_FOCO 2
 
+#define MATERIAL_BRONZE 0
+#define MATERIAL_CHROME 1
+
 // testuraren informazioa
 // información de textura
 
@@ -85,6 +88,8 @@ object3d **foptr;   // Puntero al puntero del primer objeto de la lista activa (
 object3d **sel_ptr; // Puntero al puntero del objeto actualmente seleccionado (independiente de la lista)
 
 light luz_ambiental;
+
+material materiales[4];
 
 int camara_activa; // Si estamos viendo desde la camara o no ( en caso negativo vemos desde objeto )
 int tipo_camara;
@@ -443,18 +448,18 @@ int aplicar_mperspectiva(vertex *pptr, double m[16])
 
     // printf(" 2 pptr->x %f\n", pptr->z);
 }
-/*
+
 void normalizar_p(punto *pptr)
 {
     double mod = sqrt(pow(pptr->x, 2) + pow(pptr->y, 2) + pow(pptr->z, 2));
 
-    if(mod == 0) mod = 1;
+    if (mod == 0)
+        mod = 1;
 
     pptr->x = pptr->x / mod;
     pptr->y = pptr->y / mod;
     pptr->z = pptr->z / mod;
 }
-*/
 
 // Calcula la intensidad para cada vertice del objeto
 void calcular_intesidad(object3d *objptr)
@@ -505,9 +510,9 @@ void calcular_intesidad(object3d *objptr)
     double sum_espec_g = 0;
     double sum_espec_b = 0;
 
-    double intensidad_ambiental_r = luz_ambiental.I.r * objptr->Ka.r; // I_a * K_a
-    double intensidad_ambiental_g = luz_ambiental.I.g * objptr->Ka.g; // I_a * K_a
-    double intensidad_ambiental_b = luz_ambiental.I.b * objptr->Ka.b; // I_a * K_a
+    double intensidad_ambiental_r = luz_ambiental.I.r * objptr->mat->Ka.r; // I_a * K_a
+    double intensidad_ambiental_g = luz_ambiental.I.g * objptr->mat->Ka.g; // I_a * K_a
+    double intensidad_ambiental_b = luz_ambiental.I.b * objptr->mat->Ka.b; // I_a * K_a
 
     if (camara_activa == 1)
         observadorptr = camara_ptr;
@@ -591,21 +596,32 @@ void calcular_intesidad(object3d *objptr)
             else
             { // LUZ_DIRECCIONAL
 
-                // Calcular direccion en el sistema de referencia de la camara
+                // Calcular direccion de la luz en el sistema de referencia de la camara
                 dir_local.x = luzptr->lightptr->dir[0];
                 dir_local.y = luzptr->lightptr->dir[1];
                 dir_local.z = luzptr->lightptr->dir[2]; // SR Local ( Luz )
 
                 mxp(&dir, luzptr->mptr->m, dir_local); // SR Mundo
                 mxp(&dir_cam, mcsr_observador.m, dir); // SR Camara
+                normalizar_p(&dir_cam);
+                printf("dir_cam (%f,%f,%f)\n", dir_cam.x, dir_cam.y, dir_cam.z);
+                printf("N_cam (%f,%f,%f)\n", N_cam.x, N_cam.y, N_cam.z);
+
+                normalizar_p(&dir_cam);
+                normalizar_p(&N_cam);
+
 
                 NL = N_cam.x * dir_cam.x + N_cam.y * dir_cam.y + N_cam.z * dir_cam.z; // N * L
+                printf("NL=%f\n",NL);
+
+                if (NL < 0)
+                    NL = 0; // max ( 0, N*L )
             }
 
             // printf("NL = %f\n", NL);
-            sum_luces_r += NL * luzptr->lightptr->I.r * objptr->kd.r; // N*Li*Ii*Kd
-            sum_luces_g += NL * luzptr->lightptr->I.g * objptr->kd.g; // N*Li*Ii*Kd
-            sum_luces_g += NL * luzptr->lightptr->I.b * objptr->kd.b; // N*Li*Ii*Kd
+            sum_luces_r += NL * luzptr->lightptr->I.r * objptr->mat->Kd.r; // N*Li*Ii*Kd
+            sum_luces_g += NL * luzptr->lightptr->I.g * objptr->mat->Kd.g; // N*Li*Ii*Kd
+            sum_luces_g += NL * luzptr->lightptr->I.b * objptr->mat->Kd.b; // N*Li*Ii*Kd
             // printf("sum_luces (%f,%f,%f)\n", sum_luces_r, sum_luces_g, sum_luces_b);
 
             // Calcular vector especular, reflejo de L ---  H esta en el SR de la Camara
@@ -636,9 +652,9 @@ void calcular_intesidad(object3d *objptr)
             if (NH < 0)
                 NH = 0; // max ( 0, N*L )
 
-            sum_espec_r += NH * luzptr->lightptr->I.r * objptr->ks.r; // ((N*H)^ns * Ii * Ks)
-            sum_espec_g += NH * luzptr->lightptr->I.g * objptr->ks.g; // ((N*H)^ns * Ii * Ks)
-            sum_espec_b += NH * luzptr->lightptr->I.b * objptr->ks.b; // ((N*H)^ns * Ii * Ks)
+            sum_espec_r += NH * luzptr->lightptr->I.r * objptr->mat->Ks.r; // ((N*H)^ns * Ii * Ks)
+            sum_espec_g += NH * luzptr->lightptr->I.g * objptr->mat->Ks.g; // ((N*H)^ns * Ii * Ks)
+            sum_espec_b += NH * luzptr->lightptr->I.b * objptr->mat->Ks.b; // ((N*H)^ns * Ii * Ks)
         }
 
         /*
@@ -799,7 +815,7 @@ int toggle_luz(int indice)
         }
     }
 
-    return estado;
+    return !estado;
 }
 
 int es_visible(object3d *optr, int i)
@@ -1828,7 +1844,7 @@ static void teklatua(unsigned char key, int x, int y)
                           }
                  break; */
     case '1':
-        if (toggle_luz(2) == 0)
+        if (toggle_luz(2) == 1)
         {
             printf("SOL ENCENDIDO\n");
         }
@@ -1838,7 +1854,7 @@ static void teklatua(unsigned char key, int x, int y)
         }
         break;
     case '2':
-        if (toggle_luz(1) == 0)
+        if (toggle_luz(1) == 1)
         {
             printf("BOMBILLA ENCENDIDA\n");
         }
@@ -1848,7 +1864,7 @@ static void teklatua(unsigned char key, int x, int y)
         }
         break;
     case '3':
-        if (toggle_luz(0) == 0)
+        if (toggle_luz(0) == 1)
         {
             printf("FOCO ENCENDIDO\n");
         }
@@ -1869,6 +1885,56 @@ static void teklatua(unsigned char key, int x, int y)
 
     // The screen must be drawn to show the new triangle
     glutPostRedisplay();
+}
+
+void inicializar_materiales()
+{
+    // Materiales a mano
+
+    material *bronze = (material *)malloc(sizeof(material));
+    // Bronze
+    /*
+    float[] mat_ambient ={ 0.2125f, 0.1275f, 0.054f, 1.0f };
+    float[] mat_diffuse ={ 0.714f, 0.4284f, 0.18144f, 1.0f };
+    float[] mat_specular ={ 0.393548f, 0.271906f, 0.166721f, 1.0f };
+    */
+    // 0.2125f, 0.1275f, 0.054f
+    bronze->Ka.r = 0.2125;
+    bronze->Ka.g = 0.1275;
+    bronze->Ka.b = 0.054;
+
+    // 0.714f, 0.4284f, 0.18144f
+    bronze->Kd.r = 0.714;
+    bronze->Kd.g = 0.4284;
+    bronze->Kd.b = 0.18144;
+
+    // 0.393548f, 0.271906f, 0.166721f
+    bronze->Ks.r = 0.393548;
+    bronze->Ks.g = 0.271906;
+    bronze->Ks.b = 0.166721;
+
+    materiales[0] = *bronze;
+
+    material *chrome = (material *)malloc(sizeof(material));
+    /*
+    float[] mat_ambient ={0.25f, 0.25f, 0.25f, 1.0f  };
+    float[] mat_diffuse ={0.4f, 0.4f, 0.4f, 1.0f };
+    float[] mat_specular ={0.774597f, 0.774597f, 0.774597f, 1.0f };
+    */
+
+    chrome->Ka.r = 0.25;
+    chrome->Ka.g = 0.25;
+    chrome->Ka.b = 0.25;
+
+    chrome->Kd.r = 0.4;
+    chrome->Kd.g = 0.4;
+    chrome->Kd.b = 0.4;
+
+    chrome->Ks.r = 0.774597;
+    chrome->Ks.g = 0.774597;
+    chrome->Ks.b = 0.774597;
+
+    materiales[1] = *chrome;
 }
 
 int main(int argc, char **argv)
@@ -1916,8 +1982,11 @@ int main(int argc, char **argv)
     dibujar_no_visible = 1;
     dibujar_normales = 1;
 
+    inicializar_materiales();
+
     // Cargar una camara como un objeto. Buscar otra manera mas simple
     read_from_file("cam.obj", LISTA_CAMARAS);
+    (*sel_ptr)->mat = &(materiales[MATERIAL_BRONZE]);
     camara_ptr = (*sel_ptr);
 
     translacion(&matriz_transformacion, EJE_Z, DIR_ADELANTE, 300);
@@ -1925,12 +1994,13 @@ int main(int argc, char **argv)
 
     // ------- Configurar luces
     // Configurar luz ambiental
-    luz_ambiental.I.r = 5;
-    luz_ambiental.I.g = 5;
-    luz_ambiental.I.b = 5;
+    luz_ambiental.I.r = 0.2;
+    luz_ambiental.I.g = 0.2;
+    luz_ambiental.I.b = 0.2;
 
     // Cargar SOL ( luz direccional )
     read_from_file("sun.obj", LISTA_LUCES);
+    (*sel_ptr)->mat = &(materiales[MATERIAL_BRONZE]);
     translacion(&matriz_transformacion, EJE_Y, DIR_ADELANTE, 300);
     aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
     escalado(&matriz_transformacion, DIR_ADELANTE, PROPORCION_ESCALADO * 10);
@@ -1939,32 +2009,41 @@ int main(int argc, char **argv)
 
     // Cargar Bombilla ( luz posicional )
     read_from_file("cam.obj", LISTA_LUCES);
+    (*sel_ptr)->mat = &(materiales[MATERIAL_BRONZE]);
     translacion(&matriz_transformacion, EJE_Y, DIR_ATRAS, 40);
     aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
     crear_luz((*sel_ptr), LUZ_POSICIONAL, color_sol, 0, 0, 0, 0, 0, 0, 0);
 
     read_from_file("cam.obj", LISTA_LUCES);
+    (*sel_ptr)->mat = &(materiales[MATERIAL_BRONZE]);
     translacion(&matriz_transformacion, EJE_Y, DIR_ATRAS, 40);
     aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
     crear_luz((*sel_ptr), LUZ_FOCO, color_sol, 0, 0, 0, 0, 0, 0, cos(30));
 
     if (argc > 1)
+    {
         read_from_file(argv[1], LISTA_OBJETOS);
+        (*sel_ptr)->mat = &(materiales[MATERIAL_BRONZE]);
+    }
     else
     {
         read_from_file("r_falke.obj", LISTA_OBJETOS);
+        (*sel_ptr)->mat = &(materiales[MATERIAL_BRONZE]);
         translacion(&matriz_transformacion, EJE_X, DIR_ATRAS, 240);
         aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
 
         read_from_file("x_wing.obj", LISTA_OBJETOS);
+        (*sel_ptr)->mat = &(materiales[MATERIAL_CHROME]);
         translacion(&matriz_transformacion, EJE_Y, DIR_ATRAS, 20);
         aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
 
         read_from_file("cam.obj", LISTA_OBJETOS);
+        (*sel_ptr)->mat = &(materiales[MATERIAL_CHROME]);
         translacion(&matriz_transformacion, EJE_X, DIR_ADELANTE, 370);
         aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
 
         read_from_file("box.obj", LISTA_OBJETOS);
+        (*sel_ptr)->mat = &(materiales[MATERIAL_BRONZE]);
         translacion(&matriz_transformacion, EJE_Z, DIR_ADELANTE, 200);
         translacion(&matriz_transformacion, EJE_X, DIR_ADELANTE, 200);
         aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);

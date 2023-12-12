@@ -311,23 +311,6 @@ int read_wavefront(char *file_name, object3d *object_ptr)
         // printf("mod_n=%f\n", mod_n);
     }
 
-    // Materiales a mano
-
-    // 0.2125f, 0.1275f, 0.054f
-    object_ptr->Ka.r = 0.2125;
-    object_ptr->Ka.g = 0.1275;
-    object_ptr->Ka.b = 0.054;
-
-    // 0.714f, 0.4284f, 0.18144f
-    object_ptr->kd.r = 0.714;
-    object_ptr->kd.g = 0.4284;
-    object_ptr->kd.b = 0.18144;
-
-    // 0.393548f, 0.271906f, 0.166721f
-    object_ptr->ks.r = 0.393548;
-    object_ptr->ks.g = 0.271906;
-    object_ptr->ks.b = 0.166721;
-
     if (tiene_color == 0)
     {
         object_ptr->rgb.r = 0;
