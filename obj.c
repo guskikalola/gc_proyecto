@@ -196,50 +196,17 @@ int read_wavefront(char *file_name, object3d *object_ptr)
                 line_1[i - 2] = '\0';
                 num_vertices_face = sreadint2(line_1, values);
 
-                // if (num_vertices_face == 4)
-                // {
-                //     face_table[indexx_face].num_vertices = 3;
-                //     face_table[indexx_face + 1].num_vertices = 3;
-                //     // printf("f %d vertices\n",face_table[j].num_vertices);
-                //     face_table[indexx_face].vertex_ind_table = (int *)malloc(face_table[indexx_face].num_vertices * sizeof(int));
-                //     face_table[indexx_face + 1].vertex_ind_table = (int *)malloc(face_table[indexx_face + 1].num_vertices * sizeof(int));
-
-                //     face_table[indexx_face].vertex_ind_table[0] = values[0] - 1;
-                //     face_table[indexx_face].vertex_ind_table[1] = values[1] - 1;
-                //     face_table[indexx_face].vertex_ind_table[2] = values[2] - 1;
-
-                //     face_table[indexx_face + 1].vertex_ind_table[0] = values[0] - 1;
-                //     face_table[indexx_face + 1].vertex_ind_table[1] = values[2] - 1;
-                //     face_table[indexx_face + 1].vertex_ind_table[2] = values[3] - 1;
-
-                //     for (i = 0; i < face_table[indexx_face].num_vertices; i++)
-                //     {
-                //         // face_table[j].vertex_ind_table[i] = values[i] - 1;
-                //         // // printf(" %d ",values[i] - 1);
-                //         vertex_table[face_table[indexx_face].vertex_ind_table[i]].num_faces++;
-                //     }
-
-                //     for (i = 0; i < face_table[indexx_face + 1].num_vertices; i++)
-                //     {
-                //         // face_table[j].vertex_ind_table[i] = values[i] - 1;
-                //         // // printf(" %d ",values[i] - 1);
-                //         vertex_table[face_table[indexx_face + 1].vertex_ind_table[i]].num_faces++;
-                //     }
-
-                //     indexx_face += 2;
-                // }
-                // else // 3 (?)
-                // {
-
-                for (i = 2; i < num_vertices_face; i++)
+                // Dividir poligono en triangulos
+                // https://stackoverflow.com/a/23724231
+                // 0 (i) (i + 1)  [for i in 1..(n - 2)]
+                for (i = 1; i <= num_vertices_face-2; i++)
                 {
-                    face_table[indexx_face].num_vertices = 3; // Vamos a divirlo en triangulos
-                    // V[i-2] V[i-1] V[0]
+                    face_table[indexx_face].num_vertices = 3; // Vamos a divirlo en triangulos, 3 vertices
 
                     face_table[indexx_face].vertex_ind_table = (int *)malloc(face_table[indexx_face].num_vertices * sizeof(int));
                     face_table[indexx_face].vertex_ind_table[0] = values[0] - 1;
-                    face_table[indexx_face].vertex_ind_table[1] = values[i-1] - 1;
-                    face_table[indexx_face].vertex_ind_table[2] = values[i] - 1;
+                    face_table[indexx_face].vertex_ind_table[1] = values[i] - 1;
+                    face_table[indexx_face].vertex_ind_table[2] = values[i+1] - 1;
 
                     // printf("f %d vertices\n",face_table[j].num_vertices);
                     for (j = 0; j < face_table[indexx_face].num_vertices; j++)
@@ -346,16 +313,27 @@ int read_wavefront(char *file_name, object3d *object_ptr)
 
     // Materiales a mano
 
-    object_ptr->kd.r = 0.5;
-    object_ptr->kd.g = 0.5;
-    object_ptr->kd.b = 0.3;
+    // 0.2125f, 0.1275f, 0.054f
+    object_ptr->Ka.r = 0.2125;
+    object_ptr->Ka.g = 0.1275;
+    object_ptr->Ka.b = 0.054;
 
-    if(tiene_color == 0)
-        {
-            object_ptr->rgb.r = 0;
-            object_ptr->rgb.g = 0;
-            object_ptr->rgb.b = 0;
-        }
+    // 0.714f, 0.4284f, 0.18144f
+    object_ptr->kd.r = 0.714;
+    object_ptr->kd.g = 0.4284;
+    object_ptr->kd.b = 0.18144;
+
+    // 0.393548f, 0.271906f, 0.166721f
+    object_ptr->ks.r = 0.393548;
+    object_ptr->ks.g = 0.271906;
+    object_ptr->ks.b = 0.166721;
+
+    if (tiene_color == 0)
+    {
+        object_ptr->rgb.r = 0;
+        object_ptr->rgb.g = 0;
+        object_ptr->rgb.b = 0;
+    }
 
     return (0);
 }

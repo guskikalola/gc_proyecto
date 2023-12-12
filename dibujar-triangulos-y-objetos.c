@@ -57,23 +57,6 @@
 #define LUZ_POSICIONAL 1
 #define LUZ_FOCO 2
 
-// typedef struct mlist
-// {
-//     double m[16];
-//     struct mlist *hptr;
-// } mlist;
-
-/*
-typedef struct triobj
-{
-    hiruki *triptr;
-    int num_triangles;
-    mlist *mptr;
-    struct triobj *hptr;
-    unsigned char *color;
-} triobj;
-*/
-
 // testuraren informazioa
 // información de textura
 
@@ -101,6 +84,8 @@ int lista_activa; // Indicador de la lista actualmente activa ( Camaras, objetos
 object3d **foptr;   // Puntero al puntero del primer objeto de la lista activa (independiente de la lista)
 object3d **sel_ptr; // Puntero al puntero del objeto actualmente seleccionado (independiente de la lista)
 
+light luz_ambiental;
+
 int camara_activa; // Si estamos viendo desde la camara o no ( en caso negativo vemos desde objeto )
 int tipo_camara;
 int modo_camara;
@@ -109,12 +94,12 @@ int lineak;
 int objektuak;
 char aldaketa;
 int ald_lokala;
+int dibujar_normales;
+int dibujar_no_visible;
 
 char fitxiz[100];
 
 int ultimo_es_visible;
-int dibujar_no_visible;
-int dibujar_normales;
 
 // TODO
 // funtzio honek u eta v koordenatuei dagokien pointerra itzuli behar du.
@@ -132,16 +117,16 @@ unsigned char *color_textura(float u, float v)
     return (lag + dimx * yp * 3 + xp * 3); // Hay que multiplicar por 3 porque cada punto son 3 posiciones (r,g,b)
 }
 
-void dibujar_linea(punto p1, punto p2, color3 color)
+void dibujar_linea(vertex p1, vertex p2, color3 color)
 {
     float j;
-    unsigned char r, g, b;
+    double r, g, b;
     unsigned char *colorv;
-    punto *pcortemayor, *pcortemenor;
-    punto pcalculado;
+    vertex *pcortemayor, *pcortemenor;
+    vertex pcalculado;
     double cambioj;
 
-    if (p1.x > p2.x)
+    if (p1.coord.x > p2.coord.x)
     {
         pcortemayor = &p1;
         pcortemenor = &p2;
@@ -152,23 +137,23 @@ void dibujar_linea(punto p1, punto p2, color3 color)
         pcortemenor = &p1;
     }
 
-    if (pcortemayor->x - pcortemenor->x == 0)
+    if (pcortemayor->coord.x - pcortemenor->coord.x == 0)
         cambioj = 1;
     else
-        cambioj = 1 / (pcortemayor->x - pcortemenor->x);
+        cambioj = 1 / (pcortemayor->coord.x - pcortemenor->coord.x);
 
-    if (pcortemayor->x - pcortemenor->x > 1000)
+    if (pcortemayor->coord.x - pcortemenor->coord.x > 1000)
         return;
-    if (abs(pcortemayor->y - pcortemenor->y) > 1000)
+    if (abs(pcortemayor->coord.y - pcortemenor->coord.y) > 1000)
         return;
-    if (abs(pcortemayor->z - pcortemenor->z) > 1000)
+    if (abs(pcortemayor->coord.z - pcortemenor->coord.z) > 1000)
         return;
 
     for (j = 1; j > 0; j -= cambioj)
     {
-        pcalculado.x = j * pcortemayor->x + (1 - j) * pcortemenor->x;
-        pcalculado.y = j * pcortemayor->y + (1 - j) * pcortemenor->y;
-        pcalculado.z = j * pcortemayor->z + (1 - j) * pcortemenor->z;
+        pcalculado.coord.x = j * pcortemayor->coord.x + (1 - j) * pcortemenor->coord.x;
+        pcalculado.coord.y = j * pcortemayor->coord.y + (1 - j) * pcortemenor->coord.y;
+        pcalculado.coord.z = j * pcortemayor->coord.z + (1 - j) * pcortemenor->coord.z;
         pcalculado.u = j * pcortemayor->u + (1 - j) * pcortemenor->u;
         pcalculado.v = j * pcortemayor->v + (1 - j) * pcortemenor->v;
         pcalculado.intesidad.r = j * pcortemayor->intesidad.r + (1 - j) * pcortemenor->intesidad.r;
@@ -176,15 +161,15 @@ void dibujar_linea(punto p1, punto p2, color3 color)
         pcalculado.intesidad.b = j * pcortemayor->intesidad.b + (1 - j) * pcortemenor->intesidad.b;
 
         // TODO: Por ahora me vale para mejorar un poco el rendimiento
-        if (abs(pcalculado.x) > 500 || abs(pcalculado.y) > 500)
+        if (abs(pcalculado.coord.x) > 500 || abs(pcalculado.coord.y) > 500)
             continue;
 
         glBegin(GL_POINTS);
         if (ultimo_es_visible == 1)
         {
-            r = color.r * pcalculado.intesidad.r;
-            g = color.g * pcalculado.intesidad.g;
-            b = color.b * pcalculado.intesidad.b;
+            r = pcalculado.intesidad.r;
+            g = pcalculado.intesidad.g;
+            b = pcalculado.intesidad.b;
             // printf("intensidad (%f,%f,%f) color (%f,%f,%f)\n", pcalculado.intesidad.r, pcalculado.intesidad.g, pcalculado.intesidad.b, color.r, color.g, color.b);
         }
         else
@@ -193,8 +178,8 @@ void dibujar_linea(punto p1, punto p2, color3 color)
             g = 0;
             b = 0;
         }
-        glColor3ub(r, g, b);
-        glVertex3f(pcalculado.x, pcalculado.y, pcalculado.z);
+        glColor3d(r, g, b);
+        glVertex3f(pcalculado.coord.x, pcalculado.coord.y, pcalculado.coord.z);
         glEnd();
     }
 }
@@ -270,13 +255,13 @@ void mxp(punto *pptr, double m[16], punto p)
     pptr->v = p.v;
 }
 
-void mxv(punto *pptr, double m[16], vertex v)
+void mxv(vertex *pptr, double m[16], vertex v)
 {
     int i;
 
-    pptr->x = m[0] * v.coord.x + m[1] * v.coord.y + m[2] * v.coord.z + m[3];
-    pptr->y = m[4] * v.coord.x + m[5] * v.coord.y + m[6] * v.coord.z + m[7];
-    pptr->z = m[8] * v.coord.x + m[9] * v.coord.y + m[10] * v.coord.z + m[11];
+    pptr->coord.x = m[0] * v.coord.x + m[1] * v.coord.y + m[2] * v.coord.z + m[3];
+    pptr->coord.y = m[4] * v.coord.x + m[5] * v.coord.y + m[6] * v.coord.z + m[7];
+    pptr->coord.z = m[8] * v.coord.x + m[9] * v.coord.y + m[10] * v.coord.z + m[11];
     pptr->u = v.u;
     pptr->v = v.v;
     for (i = 0; i < 3; i++)
@@ -407,10 +392,10 @@ void calcular_mperspectiva(mlist *mresptr, float n, float f, float r, float l, f
 // Devuelve 0 si el punto está dentro del campo de vision
 // Devuelve -1 si la cuarta componente es 0 y la division da infinito
 // Devuelve -2 si el punto esta detras de la camara
-int aplicar_mperspectiva(punto *pptr, double m[16])
+int aplicar_mperspectiva(vertex *pptr, double m[16])
 {
 
-    punto ptemp;
+    vertex ptemp;
     float w;
 
     /*
@@ -421,11 +406,11 @@ int aplicar_mperspectiva(punto *pptr, double m[16])
         | 12 13 14 15 ]
     */
 
-    ptemp.x = m[0] * pptr->x + m[1] * pptr->y + m[2] * pptr->z + m[3];
-    ptemp.y = m[4] * pptr->x + m[5] * pptr->y + m[6] * pptr->z + m[7];
-    ptemp.z = m[8] * pptr->x + m[9] * pptr->y + m[10] * pptr->z + m[11];
+    ptemp.coord.x = m[0] * pptr->coord.x + m[1] * pptr->coord.y + m[2] * pptr->coord.z + m[3];
+    ptemp.coord.y = m[4] * pptr->coord.x + m[5] * pptr->coord.y + m[6] * pptr->coord.z + m[7];
+    ptemp.coord.z = m[8] * pptr->coord.x + m[9] * pptr->coord.y + m[10] * pptr->coord.z + m[11];
     // w = m[12] * pptr->x + m[13] * pptr->y + m[14] * pptr->z + m[15];
-    w = m[14] * pptr->z;
+    w = m[14] * pptr->coord.z;
     ptemp.u = pptr->u;
     ptemp.v = pptr->v;
 
@@ -440,24 +425,36 @@ int aplicar_mperspectiva(punto *pptr, double m[16])
     // printf(" 1 ptemp.x %f\n", ptemp.x);
     // printf(" 1 pptr->x %f\n", pptr->x);
     // printf(" 1 w %f\n", w);
-    pptr->x = (ptemp.x / w) * 500;
-    pptr->y = (ptemp.y / w) * 500;
-    pptr->z = -(ptemp.z / abs(w));
+    pptr->coord.x = (ptemp.coord.x / w) * 500;
+    pptr->coord.y = (ptemp.coord.y / w) * 500;
+    pptr->coord.z = -(ptemp.coord.z / abs(w));
     pptr->u = ptemp.u;
     pptr->v = ptemp.v;
 
     // z visible [-500,-CAMARA_CONFIG_NEAR)
-    if (pptr->z >= 0 || pptr->z <= -1)
+    if (pptr->coord.z >= 0 || pptr->coord.z <= -1)
     {
         return -2;
     }
 
-    pptr->z *= 500;
+    pptr->coord.z *= 500;
 
     return 0;
 
     // printf(" 2 pptr->x %f\n", pptr->z);
 }
+/*
+void normalizar_p(punto *pptr)
+{
+    double mod = sqrt(pow(pptr->x, 2) + pow(pptr->y, 2) + pow(pptr->z, 2));
+
+    if(mod == 0) mod = 1;
+
+    pptr->x = pptr->x / mod;
+    pptr->y = pptr->y / mod;
+    pptr->z = pptr->z / mod;
+}
+*/
 
 // Calcula la intensidad para cada vertice del objeto
 void calcular_intesidad(object3d *objptr)
@@ -472,14 +469,16 @@ void calcular_intesidad(object3d *objptr)
     punto pluz_cam;
 
     punto pvert_local;
-    punto pvert;
     punto pvert_cam;
 
     mlist mcsr_observador;
 
     punto N_local;
-    punto N;
     punto N_cam;
+
+    punto dir_local;
+    punto dir;
+    punto dir_cam;
 
     double I_a = 0; // Intesidad ambiental
     double K_a = 0; // Coeficiente ambiental
@@ -492,6 +491,7 @@ void calcular_intesidad(object3d *objptr)
 
     double NL; // N * L
     double NH; // N * H
+    double FL; // dir * L
 
     double V[3];  // V
     double VL[3]; // V + L
@@ -505,9 +505,9 @@ void calcular_intesidad(object3d *objptr)
     double sum_espec_g = 0;
     double sum_espec_b = 0;
 
-    double intensidad_ambiental_r = 0; // I_a * K_a
-    double intensidad_ambiental_g = 0; // I_a * K_a
-    double intensidad_ambiental_b = 0; // I_a * K_a
+    double intensidad_ambiental_r = luz_ambiental.I.r * objptr->Ka.r; // I_a * K_a
+    double intensidad_ambiental_g = luz_ambiental.I.g * objptr->Ka.g; // I_a * K_a
+    double intensidad_ambiental_b = luz_ambiental.I.b * objptr->Ka.b; // I_a * K_a
 
     if (camara_activa == 1)
         observadorptr = camara_ptr;
@@ -532,40 +532,75 @@ void calcular_intesidad(object3d *objptr)
         // Calcular vector normal del vertice en el SR de la camara ( Solo afectan las rotaciones )
         N_local.x = vptr->N[0];
         N_local.y = vptr->N[1];
-        N_local.z = vptr->N[2];
-        mxp(&N, mmodelview_ptr->m, N_local); // SR Mundo
-        mxp(&N_cam, mcsr_observador.m, N);   // SR Camara
+        N_local.z = vptr->N[2];                  // SR Local ( objeto )
+        mxp(&N_cam, mmodelview_ptr->m, N_local); // SR Camara
+        // printf("N_local (%f,%f,%f)\n",N_local.x,N_local.y,N_local.z);
+        // printf("N_cam (%f,%f,%f)\n",N_cam.x,N_cam.y,N_cam.z);
 
         // Calcular posicion del vertice en el SR de la camara
         pvert_local.x = vptr->coord.x;
         pvert_local.y = vptr->coord.y;
-        pvert_local.z = vptr->coord.z;
-        mxp(&pvert, mmodelview_ptr->m, pvert_local); // SR Mundo
-        mxp(&pvert_cam, mcsr_observador.m, pvert);   // SR Camara
+        pvert_local.z = vptr->coord.z;                   // SR Local ( objeto )
+        mxp(&pvert_cam, mmodelview_ptr->m, pvert_local); // SR Camara
 
         // Recorrer todas las luces   ---    E (N*Li*Ii*Kd)  +  E ((N*H)^ns * Ii * Ks)
         for (luzptr = lucesptr; luzptr != 0; luzptr = luzptr->hptr)
         {
-            if(luzptr->lightptr->onoff == 0)
+            if (luzptr->lightptr->onoff == 0)
                 continue;
 
-            // Calcular posicion de la luz en el SR de la camara ( le sumamos la pos de la luz dentro del obj, offset )
-            pluz.x = luzptr->mptr->m[3] + luzptr->lightptr->pos[0];
-            pluz.x = luzptr->mptr->m[7] + luzptr->lightptr->pos[1];
-            pluz.x = luzptr->mptr->m[11] + luzptr->lightptr->pos[2];
+            if (luzptr->lightptr->type == LUZ_POSICIONAL || luzptr->lightptr->type == LUZ_FOCO)
+            {
 
-            mxp(&pluz_cam, mcsr_observador.m, pluz); // SR Camara
+                // Calcular posicion de la luz en el SR de la camara ( le sumamos la pos de la luz dentro del obj, offset )
+                pluz.x = luzptr->mptr->m[3] + luzptr->lightptr->pos[0];
+                pluz.y = luzptr->mptr->m[7] + luzptr->lightptr->pos[1];
+                pluz.z = luzptr->mptr->m[11] + luzptr->lightptr->pos[2]; // SR Mundo
 
-            // Calcular vector hacia la luz ( luz - vertice )  ---  L esta en el SR de la Camara
-            L[0] = pluz_cam.x - pvert_cam.x;
-            L[1] = pluz_cam.y - pvert_cam.y;
-            L[2] = pluz_cam.z - pvert_cam.z;
+                mxp(&pluz_cam, mcsr_observador.m, pluz); // SR Camara
 
-            NL = N_cam.x * L[0] + N_cam.y * L[1] + -(N_cam.z * L[2]); // N * L
-            // printf("N_cam (%f,%f,%f) pluz_cam (%f,%f,%f)  pvert_cam (%f,%f,%f)\n",N_cam.x,N_cam.y,N_cam.z,pluz_cam.x,pluz_cam.y,pluz_cam.z,pvert_cam.x,pvert_cam.y,pvert_cam.z);
+                // Calcular vector hacia la luz ( luz - vertice )  ---  L esta en el SR de la Camara
+                L[0] = pluz_cam.x - pvert_cam.x;
+                L[1] = pluz_cam.y - pvert_cam.y;
+                L[2] = pluz_cam.z - pvert_cam.z; // SR Camara
 
-            if (NL < 0)
-                NL = 0; // max ( 0, N*L )
+                NL = N_cam.x * L[0] + N_cam.y * L[1] + N_cam.z * L[2]; // N * L
+
+                // printf("luz (%f,%f,%f)  objeto (%f,%f,%f) L(%f,%f,%f) NL=%f\n", pluz_cam.x, pluz_cam.y, pluz_cam.z, pvert_cam.x, pvert_cam.y, pvert_cam.z, L[0],L[1],L[2], NL);
+                // printf("N_cam (%f,%f,%f) pluz_cam (%f,%f,%f)  pvert_cam (%f,%f,%f)\n",N_cam.x,N_cam.y,N_cam.z,pluz_cam.x,pluz_cam.y,pluz_cam.z,pvert_cam.x,pvert_cam.y,pvert_cam.z);
+
+                if (NL < 0)
+                    NL = 0; // max ( 0, N*L )
+
+                if (luzptr->lightptr->type == LUZ_FOCO)
+                {
+                    // Calcular direccion en el sistema de referencia de la camara
+                    dir_local.x = luzptr->lightptr->dir[0];
+                    dir_local.y = luzptr->lightptr->dir[1];
+                    dir_local.z = luzptr->lightptr->dir[2]; // SR Local ( Luz )
+
+                    mxp(&dir, luzptr->mptr->m, dir_local); // SR Mundo
+                    mxp(&dir_cam, mcsr_observador.m, dir); // SR Camara
+
+                    FL = -dir_local.x * L[0] + -dir_local.y * L[1] + -dir_local.z * L[2];
+
+                    if (FL < luzptr->lightptr->aperture) // No se ilumina
+                        NL = 0;
+                }
+            }
+            else
+            { // LUZ_DIRECCIONAL
+
+                // Calcular direccion en el sistema de referencia de la camara
+                dir_local.x = luzptr->lightptr->dir[0];
+                dir_local.y = luzptr->lightptr->dir[1];
+                dir_local.z = luzptr->lightptr->dir[2]; // SR Local ( Luz )
+
+                mxp(&dir, luzptr->mptr->m, dir_local); // SR Mundo
+                mxp(&dir_cam, mcsr_observador.m, dir); // SR Camara
+
+                NL = N_cam.x * dir_cam.x + N_cam.y * dir_cam.y + N_cam.z * dir_cam.z; // N * L
+            }
 
             // printf("NL = %f\n", NL);
             sum_luces_r += NL * luzptr->lightptr->I.r * objptr->kd.r; // N*Li*Ii*Kd
@@ -605,6 +640,15 @@ void calcular_intesidad(object3d *objptr)
             sum_espec_g += NH * luzptr->lightptr->I.g * objptr->ks.g; // ((N*H)^ns * Ii * Ks)
             sum_espec_b += NH * luzptr->lightptr->I.b * objptr->ks.b; // ((N*H)^ns * Ii * Ks)
         }
+
+        /*
+        sum_luces_r = 0;
+        sum_luces_g = 0;
+        sum_luces_b = 0;
+        */
+        sum_espec_r = 0;
+        sum_espec_g = 0;
+        sum_espec_b = 0;
 
         vptr->intesidad.r = intensidad_ambiental_r + sum_luces_r + sum_espec_r;
 
@@ -740,6 +784,24 @@ void cambiar_lista_activa(int lista)
     printf("Se ha cambiado la lista activa a: %s\n", nombre_lista);
 }
 
+int toggle_luz(int indice)
+{
+    int i, estado;
+    object3d *auxptr;
+
+    for (auxptr = lucesptr, i = 0; auxptr != 0 && i <= indice; auxptr = auxptr->hptr, i++)
+    {
+        if (i == indice)
+        {
+            printf("tipo luz: %d\n", auxptr->lightptr->type);
+            estado = auxptr->lightptr->onoff;
+            auxptr->lightptr->onoff = !estado;
+        }
+    }
+
+    return estado;
+}
+
 int es_visible(object3d *optr, int i)
 {
     face *fptr;
@@ -802,18 +864,18 @@ void dibujar_triangulo(object3d *optr, int i)
 {
     face *fptr;
 
-    punto *pgoiptr, *pbeheptr, *perdiptr;
-    punto p1, p2, p3;
-    punto p2_vnormal;
-    punto p2_vnormal_transformado;
+    vertex *pgoiptr, *pbeheptr, *perdiptr;
+    vertex p1, p2, p3;
+    vertex p2_vnormal;
+    vertex p2_vnormal_transformado;
 
-    punto vertice;
-    punto vertice_transformado;
+    vertex vertice;
+    vertex vertice_transformado;
 
     float t, s;
     float cambiot, cambios;
 
-    punto pcorte1, pcorte2;
+    vertex pcorte1, pcorte2;
 
     int res_mpers_vnormal;
 
@@ -855,9 +917,9 @@ void dibujar_triangulo(object3d *optr, int i)
         else
             glColor3ub(255, 255, 255);
 
-        glVertex3d(p1.x, p1.y, p1.z);
-        glVertex3d(p2.x, p2.y, p2.z);
-        glVertex3d(p3.x, p3.y, p3.z);
+        glVertex3d(p1.coord.x, p1.coord.y, p1.coord.z);
+        glVertex3d(p2.coord.x, p2.coord.y, p2.coord.z);
+        glVertex3d(p3.coord.x, p3.coord.y, p3.coord.z);
 
         // printf("p1 (%f,%f,%f) p2 (%f,%f,%f) p3 (%f,%f,%f)\n",p1.x,p1.y,p1.z,p2.x,p2.y,p2.z,p3.x,p3.y,p3.z);
 
@@ -867,12 +929,12 @@ void dibujar_triangulo(object3d *optr, int i)
         {
 
             // NORMALES DE LAS CARAS
-            p2_vnormal.x = optr->vertex_table[fptr->vertex_ind_table[0]].coord.x + fptr->N[0] * 5;
-            p2_vnormal.y = optr->vertex_table[fptr->vertex_ind_table[0]].coord.y + fptr->N[1] * 5;
-            p2_vnormal.z = optr->vertex_table[fptr->vertex_ind_table[0]].coord.z + fptr->N[2] * 5;
+            p2_vnormal.coord.x = optr->vertex_table[fptr->vertex_ind_table[0]].coord.x + fptr->N[0] * 5;
+            p2_vnormal.coord.y = optr->vertex_table[fptr->vertex_ind_table[0]].coord.y + fptr->N[1] * 5;
+            p2_vnormal.coord.z = optr->vertex_table[fptr->vertex_ind_table[0]].coord.z + fptr->N[2] * 5;
             p2_vnormal.u = 0;
             p2_vnormal.v = 0;
-            mxp(&p2_vnormal_transformado, mmodelview_ptr->m, p2_vnormal);
+            mxv(&p2_vnormal_transformado, mmodelview_ptr->m, p2_vnormal);
             if (tipo_camara == CAMARA_PERSPECTIVA)
             {
                 res_mpers_vnormal = aplicar_mperspectiva(&p2_vnormal_transformado, mperspectiva_ptr->m);
@@ -887,8 +949,8 @@ void dibujar_triangulo(object3d *optr, int i)
             if (res_mpers_vnormal == 0)
             {
                 glBegin(GL_LINES);
-                glVertex3d(p1.x, p1.y, p1.z);
-                glVertex3d(p2_vnormal_transformado.x, p2_vnormal_transformado.y, p2_vnormal_transformado.z);
+                glVertex3d(p1.coord.x, p1.coord.y, p1.coord.z);
+                glVertex3d(p2_vnormal_transformado.coord.x, p2_vnormal_transformado.coord.y, p2_vnormal_transformado.coord.z);
                 glEnd();
             }
 
@@ -897,23 +959,23 @@ void dibujar_triangulo(object3d *optr, int i)
             {
                 // printf("optr->vertex_table[fptr->vertex_ind_table[i]].coord.x=%f\n",optr->vertex_table[fptr->vertex_ind_table[i]].coord.x);
                 // printf("optr->vertex_table[fptr->vertex_ind_table[i]].N[0]=%f\n",optr->vertex_table[fptr->vertex_ind_table[i]].N[0]);
-                p2_vnormal.x = optr->vertex_table[fptr->vertex_ind_table[i]].coord.x + optr->vertex_table[fptr->vertex_ind_table[i]].N[0] * 5;
-                p2_vnormal.y = optr->vertex_table[fptr->vertex_ind_table[i]].coord.y + optr->vertex_table[fptr->vertex_ind_table[i]].N[1] * 5;
-                p2_vnormal.z = optr->vertex_table[fptr->vertex_ind_table[i]].coord.z + optr->vertex_table[fptr->vertex_ind_table[i]].N[2] * 5;
+                p2_vnormal.coord.x = optr->vertex_table[fptr->vertex_ind_table[i]].coord.x + optr->vertex_table[fptr->vertex_ind_table[i]].N[0] * 5;
+                p2_vnormal.coord.y = optr->vertex_table[fptr->vertex_ind_table[i]].coord.y + optr->vertex_table[fptr->vertex_ind_table[i]].N[1] * 5;
+                p2_vnormal.coord.z = optr->vertex_table[fptr->vertex_ind_table[i]].coord.z + optr->vertex_table[fptr->vertex_ind_table[i]].N[2] * 5;
                 p2_vnormal.u = 0;
                 p2_vnormal.v = 0;
 
                 // printf("p2_vnormal (%f,%f,%f)\n",p2_vnormal.x,p2_vnormal.y,p2_vnormal.z);
 
-                mxp(&p2_vnormal_transformado, mmodelview_ptr->m, p2_vnormal);
+                mxv(&p2_vnormal_transformado, mmodelview_ptr->m, p2_vnormal);
 
-                vertice.x = optr->vertex_table[fptr->vertex_ind_table[i]].coord.x;
-                vertice.y = optr->vertex_table[fptr->vertex_ind_table[i]].coord.y;
-                vertice.z = optr->vertex_table[fptr->vertex_ind_table[i]].coord.z;
+                vertice.coord.x = optr->vertex_table[fptr->vertex_ind_table[i]].coord.x;
+                vertice.coord.y = optr->vertex_table[fptr->vertex_ind_table[i]].coord.y;
+                vertice.coord.z = optr->vertex_table[fptr->vertex_ind_table[i]].coord.z;
                 vertice.u = 0;
                 vertice.v = 0;
 
-                mxp(&vertice_transformado, mmodelview_ptr->m, vertice);
+                mxv(&vertice_transformado, mmodelview_ptr->m, vertice);
 
                 if (tipo_camara == CAMARA_PERSPECTIVA)
                 {
@@ -931,8 +993,8 @@ void dibujar_triangulo(object3d *optr, int i)
                 {
                     glBegin(GL_LINES);
                     glColor3ub(134, 134, 134);
-                    glVertex3d(vertice_transformado.x, vertice_transformado.y, vertice_transformado.z);
-                    glVertex3d(p2_vnormal_transformado.x, p2_vnormal_transformado.y, p2_vnormal_transformado.z);
+                    glVertex3d(vertice_transformado.coord.x, vertice_transformado.coord.y, vertice_transformado.coord.z);
+                    glVertex3d(p2_vnormal_transformado.coord.x, p2_vnormal_transformado.coord.y, p2_vnormal_transformado.coord.z);
                     glEnd();
                 }
             }
@@ -944,7 +1006,7 @@ void dibujar_triangulo(object3d *optr, int i)
 
     // Calcular Psup, Pmed, Pinf
 
-    if (p1.y > p2.y)
+    if (p1.coord.y > p2.coord.y)
     {
         pgoiptr = &p1;  // Psup <- P1
         pbeheptr = &p2; // Pinf <- P2
@@ -955,12 +1017,12 @@ void dibujar_triangulo(object3d *optr, int i)
         pbeheptr = &p1; // Pinf <- P1
     }
 
-    if (p3.y > pgoiptr->y)
+    if (p3.coord.y > pgoiptr->coord.y)
     {
         perdiptr = pgoiptr; // Pmed <- Psup
         pgoiptr = &p3;      // Psup <- P3
     }
-    else if (p3.y < pbeheptr->y)
+    else if (p3.coord.y < pbeheptr->coord.y)
     {
         perdiptr = pbeheptr; // Pmed <- Pinf
         pbeheptr = &p3;      // Psup <- P3
@@ -969,10 +1031,10 @@ void dibujar_triangulo(object3d *optr, int i)
         perdiptr = &p3; // Pmed <- P3
 
     // Triangulo es una linea
-    if (p1.y == p2.y && p2.y == p3.y)
+    if (p1.coord.y == p2.coord.y && p2.coord.y == p3.coord.y)
     {
         // Coger la y min y la y max y punto de min a max
-        if (p1.x > p2.x)
+        if (p1.coord.x > p2.coord.x)
         {
             pcorte1 = p1;
             pcorte2 = p2;
@@ -983,11 +1045,11 @@ void dibujar_triangulo(object3d *optr, int i)
             pcorte2 = p1;
         }
 
-        if (p3.x > pcorte1.x)
+        if (p3.coord.x > pcorte1.coord.x)
         {
             pcorte1 = p3;
         }
-        else if (p3.x < pcorte2.x)
+        else if (p3.coord.x < pcorte2.coord.x)
         {
             pcorte2 = p3;
         }
@@ -996,15 +1058,15 @@ void dibujar_triangulo(object3d *optr, int i)
         return;
     }
 
-    if (pgoiptr->y - perdiptr->y == 0)
+    if (pgoiptr->coord.y - perdiptr->coord.y == 0)
         cambiot = 1;
     else
-        cambiot = 1 / (pgoiptr->y - perdiptr->y);
+        cambiot = 1 / (pgoiptr->coord.y - perdiptr->coord.y);
 
-    if (pgoiptr->y - pbeheptr->y == 0)
+    if (pgoiptr->coord.y - pbeheptr->coord.y == 0)
         cambios = 1;
     else
-        cambios = 1 / (pgoiptr->y - pbeheptr->y);
+        cambios = 1 / (pgoiptr->coord.y - pbeheptr->coord.y);
 
     // Vamos a utilizar las coordenadas baricentricas para calcular (x,y,z,u,v) para
     // cada punto interior del triangulo. Para ello vamos a dividir el triangulo en
@@ -1014,18 +1076,18 @@ void dibujar_triangulo(object3d *optr, int i)
     // De A -> B (avanzamos con t)  y  A -> C (avanzamos con s)
     for (t = 1, s = 1; t > 0; t = t - cambiot, s = s - cambios)
     {
-        pcorte1.x = t * pgoiptr->x + (1 - t) * perdiptr->x;
-        pcorte1.y = t * pgoiptr->y + (1 - t) * perdiptr->y;
-        pcorte1.z = t * pgoiptr->z + (1 - t) * perdiptr->z;
+        pcorte1.coord.x = t * pgoiptr->coord.x + (1 - t) * perdiptr->coord.x;
+        pcorte1.coord.y = t * pgoiptr->coord.y + (1 - t) * perdiptr->coord.y;
+        pcorte1.coord.z = t * pgoiptr->coord.z + (1 - t) * perdiptr->coord.z;
         pcorte1.u = t * pgoiptr->u + (1 - t) * perdiptr->u;
         pcorte1.v = t * pgoiptr->v + (1 - t) * perdiptr->v;
         pcorte1.intesidad.r = t * pgoiptr->intesidad.r + (1 - t) * perdiptr->intesidad.r;
         pcorte1.intesidad.g = t * pgoiptr->intesidad.g + (1 - t) * perdiptr->intesidad.g;
         pcorte1.intesidad.b = t * pgoiptr->intesidad.b + (1 - t) * perdiptr->intesidad.b;
 
-        pcorte2.x = s * pgoiptr->x + (1 - s) * pbeheptr->x;
-        pcorte2.y = s * pgoiptr->y + (1 - s) * pbeheptr->y;
-        pcorte2.z = s * pgoiptr->z + (1 - s) * pbeheptr->z;
+        pcorte2.coord.x = s * pgoiptr->coord.x + (1 - s) * pbeheptr->coord.x;
+        pcorte2.coord.y = s * pgoiptr->coord.y + (1 - s) * pbeheptr->coord.y;
+        pcorte2.coord.z = s * pgoiptr->coord.z + (1 - s) * pbeheptr->coord.z;
         pcorte2.u = s * pgoiptr->u + (1 - s) * pbeheptr->u;
         pcorte2.v = s * pgoiptr->v + (1 - s) * pbeheptr->v;
         pcorte2.intesidad.r = s * pgoiptr->intesidad.r + (1 - s) * pbeheptr->intesidad.r;
@@ -1050,25 +1112,25 @@ void dibujar_triangulo(object3d *optr, int i)
 
     // De B -> C (avanzamos con t)  y  A -> C (avanzamos con s)
 
-    if (perdiptr->y - pbeheptr->y == 0)
+    if (perdiptr->coord.y - pbeheptr->coord.y == 0)
         cambiot = 1;
     else
-        cambiot = 1 / (perdiptr->y - pbeheptr->y);
+        cambiot = 1 / (perdiptr->coord.y - pbeheptr->coord.y);
 
     for (t = 1; t > 0; t = t - cambiot, s = s - cambios)
     {
-        pcorte1.x = t * perdiptr->x + (1 - t) * pbeheptr->x;
-        pcorte1.y = t * perdiptr->y + (1 - t) * pbeheptr->y;
-        pcorte1.z = t * perdiptr->z + (1 - t) * pbeheptr->z;
+        pcorte1.coord.x = t * perdiptr->coord.x + (1 - t) * pbeheptr->coord.x;
+        pcorte1.coord.y = t * perdiptr->coord.y + (1 - t) * pbeheptr->coord.y;
+        pcorte1.coord.z = t * perdiptr->coord.z + (1 - t) * pbeheptr->coord.z;
         pcorte1.u = t * perdiptr->u + (1 - t) * pbeheptr->u;
         pcorte1.v = t * perdiptr->v + (1 - t) * pbeheptr->v;
         pcorte1.intesidad.r = t * perdiptr->intesidad.r + (1 - t) * pbeheptr->intesidad.r;
         pcorte1.intesidad.g = t * perdiptr->intesidad.g + (1 - t) * pbeheptr->intesidad.g;
         pcorte1.intesidad.b = t * perdiptr->intesidad.b + (1 - t) * pbeheptr->intesidad.b;
 
-        pcorte2.x = s * pgoiptr->x + (1 - s) * pbeheptr->x;
-        pcorte2.y = s * pgoiptr->y + (1 - s) * pbeheptr->y;
-        pcorte2.z = s * pgoiptr->z + (1 - s) * pbeheptr->z;
+        pcorte2.coord.x = s * pgoiptr->coord.x + (1 - s) * pbeheptr->coord.x;
+        pcorte2.coord.y = s * pgoiptr->coord.y + (1 - s) * pbeheptr->coord.y;
+        pcorte2.coord.z = s * pgoiptr->coord.z + (1 - s) * pbeheptr->coord.z;
         pcorte2.u = s * pgoiptr->u + (1 - s) * pbeheptr->u;
         pcorte2.v = s * pgoiptr->v + (1 - s) * pbeheptr->v;
         pcorte2.intesidad.r = s * pgoiptr->intesidad.r + (1 - s) * pbeheptr->intesidad.r;
@@ -1148,6 +1210,18 @@ static void marraztu(void)
             }
 
             for (auxptr = camarasptr; auxptr != 0; auxptr = auxptr->hptr)
+            {
+                calcular_mmodelview(mmodelview_ptr, mcsr_ptr->m, auxptr->mptr->m);
+                calcular_intesidad(auxptr);
+                for (i = 0; i < auxptr->num_faces; i++)
+                {
+                    dibujar_triangulo(auxptr, i);
+                }
+
+                // print_matrizea2("Mcamara\n", camara_ptr->mptr);
+            }
+
+            for (auxptr = lucesptr; auxptr != 0; auxptr = auxptr->hptr)
             {
                 calcular_mmodelview(mmodelview_ptr, mcsr_ptr->m, auxptr->mptr->m);
                 calcular_intesidad(auxptr);
@@ -1753,6 +1827,36 @@ static void teklatua(unsigned char key, int x, int y)
                           fclose(obj_file);
                           }
                  break; */
+    case '1':
+        if (toggle_luz(2) == 0)
+        {
+            printf("SOL ENCENDIDO\n");
+        }
+        else
+        {
+            printf("SOL APAGADO\n");
+        }
+        break;
+    case '2':
+        if (toggle_luz(1) == 0)
+        {
+            printf("BOMBILLA ENCENDIDA\n");
+        }
+        else
+        {
+            printf("BOMBILLA APAGADA\n");
+        }
+        break;
+    case '3':
+        if (toggle_luz(0) == 0)
+        {
+            printf("FOCO ENCENDIDO\n");
+        }
+        else
+        {
+            printf("FOCO APAGADO\n");
+        }
+        break;
     case 9: /* <TAB> */
         siguiente_elemento_lista();
         break;
@@ -1772,8 +1876,8 @@ int main(int argc, char **argv)
     int retval;
     mlist matriz_transformacion;
     color3 color_sol;
-    color_sol.r = 10;
-    color_sol.g = 25;
+    color_sol.r = 0;
+    color_sol.g = 0;
     color_sol.b = 100;
 
     printf(" Triangeluak: barneko puntuak eta testura\n Triángulos con puntos internos y textura \n");
@@ -1819,11 +1923,30 @@ int main(int argc, char **argv)
     translacion(&matriz_transformacion, EJE_Z, DIR_ADELANTE, 300);
     aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
 
+    // ------- Configurar luces
+    // Configurar luz ambiental
+    luz_ambiental.I.r = 5;
+    luz_ambiental.I.g = 5;
+    luz_ambiental.I.b = 5;
+
     // Cargar SOL ( luz direccional )
+    read_from_file("sun.obj", LISTA_LUCES);
+    translacion(&matriz_transformacion, EJE_Y, DIR_ADELANTE, 300);
+    aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
+    escalado(&matriz_transformacion, DIR_ADELANTE, PROPORCION_ESCALADO * 10);
+    aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
+    crear_luz((*sel_ptr), LUZ_DIRECCIONAL, color_sol, 0, 0, 0, 0, 1, 0, 0);
+
+    // Cargar Bombilla ( luz posicional )
     read_from_file("cam.obj", LISTA_LUCES);
     translacion(&matriz_transformacion, EJE_Y, DIR_ATRAS, 40);
     aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
-    crear_luz((*sel_ptr), LUZ_DIRECCIONAL, color_sol, 0, 0, 0, 0, -1, 0, 0);
+    crear_luz((*sel_ptr), LUZ_POSICIONAL, color_sol, 0, 0, 0, 0, 0, 0, 0);
+
+    read_from_file("cam.obj", LISTA_LUCES);
+    translacion(&matriz_transformacion, EJE_Y, DIR_ATRAS, 40);
+    aplicar_transformacion(&matriz_transformacion, SISTEMA_LOCAL);
+    crear_luz((*sel_ptr), LUZ_FOCO, color_sol, 0, 0, 0, 0, 0, 0, cos(30));
 
     if (argc > 1)
         read_from_file(argv[1], LISTA_OBJETOS);
