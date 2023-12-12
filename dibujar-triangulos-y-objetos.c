@@ -92,6 +92,8 @@ light luz_ambiental;
 
 material materiales[4];
 
+object3d *focoobj_ptr;
+
 int camara_activa; // Si estamos viendo desde la camara o no ( en caso negativo vemos desde objeto )
 int tipo_camara;
 int modo_camara;
@@ -213,12 +215,23 @@ void print_matrizea2(char *str, mlist *matrizea)
                matrizea->m[i * 4 + 3]);
 }
 
+void actualizar_foco()
+{
+    int i;
+    if (focoobj_ptr != 0)
+    {
+        for (i = 0; i < 16; i++)
+            focoobj_ptr->mptr->m[i] = (*sel_ptr)->mptr->m[i];
+    }
+}
+
 void print_estado()
 {
     printf("\n");
     printf("------------(COMIENZO ESTADO)------------\n");
 
     print_matrizea2("Posición cámara:", camara_ptr->mptr);
+    print_matrizea2("Posición foco:", focoobj_ptr->mptr);
     printf("\n");
 
     printf("Modo cámara (g): ");
@@ -558,9 +571,10 @@ void calcular_intesidad(object3d *objptr)
         mxvec(&N_cam, mcsr_observador.m, N); // SR Camara
                                              // printf("N_local (%f,%f,%f)\n",N_local.x,N_local.y,N_local.z);
                                              // printf("N_cam (%f,%f,%f)\n",N_cam.x,N_cam.y,N_cam.z);
-        normalizar_p(&N_cam);
+        // normalizar_p(&N_cam);
 
-        if(isnan(N_cam.x)) continue;
+        if (isnan(N_cam.x))
+            continue;
 
         // Calcular posicion del vertice en el SR de la camara
         pvert_local.x = vptr->coord.x;
@@ -605,10 +619,13 @@ void calcular_intesidad(object3d *objptr)
                     dir_local.y = luzptr->lightptr->dir[1];
                     dir_local.z = luzptr->lightptr->dir[2]; // SR Local ( Luz )
 
-                    mxvec(&dir, luzptr->mptr->m, dir_local); // SR Mundo
+                    // mxvec(&dir, luzptr->mptr->m, dir_local); // SR Mundo
+                    dir.x = luzptr->mptr->m[2];
+                    dir.y = luzptr->mptr->m[6];
+                    dir.z = luzptr->mptr->m[10];
                     mxvec(&dir_cam, mcsr_observador.m, dir); // SR Camara
 
-                    normalizar_p(&dir_cam);
+                    // normalizar_p(&dir_cam);
 
                     FL = -dir_local.x * L[0] + -dir_local.y * L[1] + -dir_local.z * L[2];
 
@@ -627,7 +644,7 @@ void calcular_intesidad(object3d *objptr)
                 mxvec(&dir, luzptr->mptr->m, dir_local); // SR Mundo
                 mxvec(&dir_cam, mcsr_observador.m, dir); // SR Camara
 
-                normalizar_p(&dir_cam);
+                // normalizar_p(&dir_cam);
 
                 NL = N_cam.x * dir_cam.x + N_cam.y * dir_cam.y + N_cam.z * dir_cam.z; // N * L
 
@@ -835,6 +852,22 @@ int toggle_luz(int indice)
     }
 
     return !estado;
+}
+
+object3d *get_luz(int indice)
+{
+    int i, estado;
+    object3d *auxptr;
+
+    for (auxptr = lucesptr, i = 0; auxptr != 0 && i <= indice; auxptr = auxptr->hptr, i++)
+    {
+        if (i == indice)
+        {
+            return auxptr;
+        }
+    }
+
+    return 0;
 }
 
 int es_visible(object3d *optr, int i)
@@ -1531,11 +1564,7 @@ void aplicar_transformacion(object3d *objptr, mlist *matriz_transformacionptr, i
     nueva_matrizptr->hptr = objptr->mptr;
     objptr->mptr = nueva_matrizptr;
 
-    // if ((*sel_ptr)->child != 0) // Tiene hijo, aplicar misma transformacion
-    // {
-    //     nueva_matrizptr->hptr = (*sel_ptr)->mptr;
-    //     (*sel_ptr)->mptr = nueva_matrizptr;
-    // }
+    actualizar_foco();
 }
 
 // Hace que la camara no pueda estar a menos de X distancia del objetivo
@@ -1799,7 +1828,7 @@ static void teklatua(unsigned char key, int x, int y)
             cambiar_lista_activa(LISTA_CAMARAS);
         // else if (camara_activa == 1)
         //     cambiar_lista_activa(LISTA_LUCES);
-
+        actualizar_foco();
         break;
     case 'C':
         if (camara_activa == 0)
@@ -1900,6 +1929,7 @@ static void teklatua(unsigned char key, int x, int y)
         break;
     case 9: /* <TAB> */
         siguiente_elemento_lista();
+        actualizar_foco();
         break;
     case 27: // <ESC>
         exit(0);
@@ -2027,6 +2057,7 @@ int main(int argc, char **argv)
     ald_lokala = 1;
     camara_ptr = 0;
     obj_ptr = 0;
+    focoobj_ptr = 0;
     camara_activa = 1;
     tipo_camara = CAMARA_PERSPECTIVA;
     ultimo_es_visible = 0;
@@ -2071,6 +2102,7 @@ int main(int argc, char **argv)
     translacion(&matriz_transformacion, EJE_Y, DIR_ATRAS, 40);
     aplicar_transformacion((*sel_ptr), &matriz_transformacion, SISTEMA_LOCAL);
     crear_luz((*sel_ptr), LUZ_FOCO, color_foco, 0, 0, 0, 0, 0, 0, cos(30));
+    focoobj_ptr = (*sel_ptr);
 
     if (argc > 1)
     {

@@ -318,5 +318,7 @@ int read_wavefront(char *file_name, object3d *object_ptr)
         object_ptr->rgb.b = 102;
     }
 
+    object_ptr->child = 0;
+
     return (0);
 }
