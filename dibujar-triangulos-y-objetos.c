@@ -581,16 +581,17 @@ void calcular_intesidad(object3d *objptr)
             {
 
                 // Calcular posicion de la luz en el SR de la camara ( le sumamos la pos de la luz dentro del obj, offset )
-                pluz.x = luzptr->mptr->m[3] + luzptr->lightptr->pos[0];
-                pluz.y = luzptr->mptr->m[7] + luzptr->lightptr->pos[1];
-                pluz.z = luzptr->mptr->m[11] + luzptr->lightptr->pos[2]; // SR Mundo
+                pluz.x = luzptr->mptr->m[3]; //+ luzptr->lightptr->pos[0];
+                pluz.y = luzptr->mptr->m[7];// + luzptr->lightptr->pos[1];
+                pluz.z = luzptr->mptr->m[11];// + luzptr->lightptr->pos[2]; // SR Mundo
 
                 mxp(&pluz_cam, mcsr_observador.m, pluz); // SR Camara
 
                 // Calcular vector hacia la luz ( luz - vertice )  ---  L esta en el SR de la Camara
-                L.x = pluz_cam.x - pvert_cam.x;
-                L.y = pluz_cam.y - pvert_cam.y;
-                L.z = pluz_cam.z - pvert_cam.z; // SR Camara
+                L.x = pvert_cam.x - pluz_cam.x ;
+                L.y =  pvert_cam.y - pluz_cam.y ;
+                L.z =   pvert_cam.z - pluz_cam.z; // SR Camara
+
                 normalizar_vec(&L);
 
                 NL = N_cam.x * L.x + N_cam.y * L.y + N_cam.z * L.z; // N * L
@@ -615,6 +616,17 @@ void calcular_intesidad(object3d *objptr)
                     mxvec(&dir_cam, mcsr_observador.m, dir); // SR Camara
 
                     normalizar_vec(&dir_cam);
+
+                    printf("dir_cam (%f,%f,%f)\n", dir_cam.x, dir_cam.y, dir_cam.z);
+
+                    // glBegin(GL_LINES);
+                    // glColor3ub(134, 134, 134);
+                    // glVertex3d(0, 0, 0);
+                    // glVertex3d(dir_cam.x * 20, dir_cam.y * 20, dir_cam.z * 20);
+                    // // glColor3ub(255, 255, 134);
+                    // // glVertex3d(0, 0, 0);
+                    // // glVertex3d(L.x * 20, L.y * 20, L.z * 20);
+                    // glEnd();
 
                     FL = -dir_local.x * L.x + -dir_local.y * L.y + -dir_local.z * L.z;
 
@@ -1574,8 +1586,8 @@ void actualizar_foco()
             focoobj_ptr->lightptr->pos[2] = 0;
 
             focoobj_ptr->lightptr->dir[0] = 0;
-            focoobj_ptr->lightptr->dir[1] = -1;
-            focoobj_ptr->lightptr->dir[2] = 0;
+            focoobj_ptr->lightptr->dir[1] = 0;
+            focoobj_ptr->lightptr->dir[2] = -1;
         }
 
         mtransformacion.m[0] = 1;
