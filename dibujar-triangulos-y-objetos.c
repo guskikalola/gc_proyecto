@@ -215,16 +215,6 @@ void print_matrizea2(char *str, mlist *matrizea)
                matrizea->m[i * 4 + 3]);
 }
 
-void actualizar_foco()
-{
-    int i;
-    if (focoobj_ptr != 0)
-    {
-        for (i = 0; i < 16; i++)
-            focoobj_ptr->mptr->m[i] = (*sel_ptr)->mptr->m[i];
-    }
-}
-
 void print_estado()
 {
     printf("\n");
@@ -278,13 +268,11 @@ void mxp(punto *pptr, double m[16], punto p)
     pptr->v = p.v;
 }
 
-void mxvec(punto *pptr, double m[16], punto p)
+void mxvec(vector3 *vptr, double m[16], vector3 v)
 {
-    pptr->x = m[0] * p.x + m[1] * p.y + m[2] * p.z;
-    pptr->y = m[4] * p.x + m[5] * p.y + m[6] * p.z;
-    pptr->z = m[8] * p.x + m[9] * p.y + m[10] * p.z;
-    pptr->u = p.u;
-    pptr->v = p.v;
+    vptr->x = m[0] * v.x + m[1] * v.y + m[2] * v.z;
+    vptr->y = m[4] * v.x + m[5] * v.y + m[6] * v.z;
+    vptr->z = m[8] * v.x + m[9] * v.y + m[10] * v.z;
 }
 
 void mxv(vertex *pptr, double m[16], vertex v)
@@ -476,16 +464,16 @@ int aplicar_mperspectiva(vertex *pptr, double m[16])
     // printf(" 2 pptr->x %f\n", pptr->z);
 }
 
-void normalizar_p(punto *pptr)
+void normalizar_vec(vector3 *vptr)
 {
-    double mod = sqrt(pow(pptr->x, 2) + pow(pptr->y, 2) + pow(pptr->z, 2));
+    double mod = sqrt(pow(vptr->x, 2) + pow(vptr->y, 2) + pow(vptr->z, 2));
 
     if (mod == 0)
         mod = 1;
 
-    pptr->x = pptr->x / mod;
-    pptr->y = pptr->y / mod;
-    pptr->z = pptr->z / mod;
+    vptr->x = vptr->x / mod;
+    vptr->y = vptr->y / mod;
+    vptr->z = vptr->z / mod;
 }
 
 // Calcula la intensidad para cada vertice del objeto
@@ -506,20 +494,20 @@ void calcular_intesidad(object3d *objptr)
 
     mlist mcsr_observador;
 
-    punto N_local;
-    punto N;
-    punto N_cam;
+    vector3 N_local;
+    vector3 N;
+    vector3 N_cam;
 
-    punto dir_local;
-    punto dir;
-    punto dir_cam;
+    vector3 dir_local;
+    vector3 dir;
+    vector3 dir_cam;
 
     double I_a = 0; // Intesidad ambiental
     double K_a = 0; // Coeficiente ambiental
-    double L[3];    // Vector a la luz
+    vector3 L;      // Vector a la luz
     double I_i = 0; // Intensidad luz
     double K_d = 0; // Coeficiente material
-    double H[3];    // Vector especular ( aproximacion )
+    vector3 H;      // Vector especular ( aproximacion )
     double K_s = 0; // Coeficiente especular
     double ns = 0;  // Factor especular
 
@@ -527,8 +515,8 @@ void calcular_intesidad(object3d *objptr)
     double NH; // N * H
     double FL; // dir * L
 
-    double V[3];  // V
-    double VL[3]; // V + L
+    vector3 V;  // V es el vector del vertice a la camara
+    vector3 VL; // V + L
     double mod_vl;
 
     double sum_luces_r = 0;
@@ -571,7 +559,7 @@ void calcular_intesidad(object3d *objptr)
         mxvec(&N_cam, mcsr_observador.m, N); // SR Camara
                                              // printf("N_local (%f,%f,%f)\n",N_local.x,N_local.y,N_local.z);
                                              // printf("N_cam (%f,%f,%f)\n",N_cam.x,N_cam.y,N_cam.z);
-        // normalizar_p(&N_cam);
+        normalizar_vec(&N_cam);
 
         if (isnan(N_cam.x))
             continue;
@@ -600,11 +588,12 @@ void calcular_intesidad(object3d *objptr)
                 mxp(&pluz_cam, mcsr_observador.m, pluz); // SR Camara
 
                 // Calcular vector hacia la luz ( luz - vertice )  ---  L esta en el SR de la Camara
-                L[0] = pluz_cam.x - pvert_cam.x;
-                L[1] = pluz_cam.y - pvert_cam.y;
-                L[2] = pluz_cam.z - pvert_cam.z; // SR Camara
+                L.x = pluz_cam.x - pvert_cam.x;
+                L.y = pluz_cam.y - pvert_cam.y;
+                L.z = pluz_cam.z - pvert_cam.z; // SR Camara
+                normalizar_vec(&L);
 
-                NL = N_cam.x * L[0] + N_cam.y * L[1] + N_cam.z * L[2]; // N * L
+                NL = N_cam.x * L.x + N_cam.y * L.y + N_cam.z * L.z; // N * L
 
                 // printf("luz (%f,%f,%f)  objeto (%f,%f,%f) L(%f,%f,%f) NL=%f\n", pluz_cam.x, pluz_cam.y, pluz_cam.z, pvert_cam.x, pvert_cam.y, pvert_cam.z, L[0],L[1],L[2], NL);
                 // printf("N_cam (%f,%f,%f) pluz_cam (%f,%f,%f)  pvert_cam (%f,%f,%f)\n",N_cam.x,N_cam.y,N_cam.z,pluz_cam.x,pluz_cam.y,pluz_cam.z,pvert_cam.x,pvert_cam.y,pvert_cam.z);
@@ -614,20 +603,20 @@ void calcular_intesidad(object3d *objptr)
 
                 if (luzptr->lightptr->type == LUZ_FOCO && NL > 0)
                 {
-                    // Calcular direccion en el sistema de referencia de la camara
+                    // Calcular direccion en el sistema de referencia de la camara ( offset de direccion + Vector Z (0,0,1) )
                     dir_local.x = luzptr->lightptr->dir[0];
                     dir_local.y = luzptr->lightptr->dir[1];
                     dir_local.z = luzptr->lightptr->dir[2]; // SR Local ( Luz )
 
-                    // mxvec(&dir, luzptr->mptr->m, dir_local); // SR Mundo
-                    dir.x = luzptr->mptr->m[2];
-                    dir.y = luzptr->mptr->m[6];
-                    dir.z = luzptr->mptr->m[10];
+                    mxvec(&dir, luzptr->mptr->m, dir_local); // SR Mundo
+                    // dir.x = luzptr->mptr->m[2];
+                    // dir.y = luzptr->mptr->m[6];
+                    // dir.z = luzptr->mptr->m[10]; // SR Mundo
                     mxvec(&dir_cam, mcsr_observador.m, dir); // SR Camara
 
-                    // normalizar_p(&dir_cam);
+                    normalizar_vec(&dir_cam);
 
-                    FL = -dir_local.x * L[0] + -dir_local.y * L[1] + -dir_local.z * L[2];
+                    FL = -dir_local.x * L.x + -dir_local.y * L.y + -dir_local.z * L.z;
 
                     if (FL < luzptr->lightptr->aperture) // No se ilumina
                         NL = 0;
@@ -644,7 +633,7 @@ void calcular_intesidad(object3d *objptr)
                 mxvec(&dir, luzptr->mptr->m, dir_local); // SR Mundo
                 mxvec(&dir_cam, mcsr_observador.m, dir); // SR Camara
 
-                // normalizar_p(&dir_cam);
+                normalizar_vec(&dir_cam);
 
                 NL = N_cam.x * dir_cam.x + N_cam.y * dir_cam.y + N_cam.z * dir_cam.z; // N * L
 
@@ -663,26 +652,30 @@ void calcular_intesidad(object3d *objptr)
             // Calcular vector especular, reflejo de L ---  H esta en el SR de la Camara
 
             //                V es el vector del vertice a la camara ( camara - vertice )
-            V[0] = 0 - pvert_cam.x; // La pos de la camara en su S.R es (0,0,0)
-            V[1] = 0 - pvert_cam.y;
-            V[2] = 0 - pvert_cam.z;
+            V.x = 0 - pvert_cam.x; // La pos de la camara en su S.R es (0,0,0)
+            V.y = 0 - pvert_cam.y;
+            V.z = 0 - pvert_cam.z;
 
-            VL[0] = V[0] + L[0];
-            VL[1] = V[1] + L[1];
-            VL[2] = V[2] + L[2];
+            VL.x = V.x + L.x;
+            VL.y = V.y + L.y;
+            VL.z = V.z + L.z;
 
-            mod_vl = sqrt(pow(VL[0], 2) + pow(VL[1], 2) + pow(VL[2], 2));
-            if (mod_vl == 0)
-            {
-                printf("mod_vl == 0\n");
-                mod_vl = 1;
-            }
+            // mod_vl = sqrt(pow(VL[0], 2) + pow(VL[1], 2) + pow(VL[2], 2));
+            // if (mod_vl == 0)
+            // {
+            //     printf("mod_vl == 0\n");
+            //     mod_vl = 1;
+            // }
 
-            H[0] = VL[0] / mod_vl;
-            H[1] = VL[1] / mod_vl;
-            H[2] = VL[2] / mod_vl;
+            normalizar_vec(&VL);
 
-            NH = N_cam.x * H[0] + N_cam.y * H[1] + -(N_cam.z * H[2]); // N * H
+            H.x = VL.x;
+            H.y = VL.y;
+            H.z = VL.z;
+
+            normalizar_vec(&H);
+
+            NH = N_cam.x * H.x + N_cam.y * H.y + -(N_cam.z * H.z); // N * H
             // printf("N_cam (%f,%f,%f) pluz_cam (%f,%f,%f)  pvert_cam (%f,%f,%f)\n",N_cam.x,N_cam.y,N_cam.z,pluz_cam.x,pluz_cam.y,pluz_cam.z,pvert_cam.x,pvert_cam.y,pvert_cam.z);
 
             if (NH < 0)
@@ -1546,6 +1539,62 @@ void escalado(mlist *matriz_transformacion, int dir, float proporcion)
     }
 }
 
+void actualizar_foco()
+{
+    int i;
+    vector3 vec_z;
+    vector3 vec_z_srcam;
+    mlist mtransformacion;
+    mlist mtemp;
+
+    if (focoobj_ptr != 0)
+    {
+        // Copiar Mobj del objeto seleccionado al foco
+        for (i = 0; i < 16; i++)
+        {
+            focoobj_ptr->mptr->m[i] = (*sel_ptr)->mptr->m[i]; // SR Mundo
+            mtransformacion.m[i] = 0;
+        }
+
+        // Actualizar pos y dir del foco
+        if (lista_activa == LISTA_CAMARAS)
+        {
+            focoobj_ptr->lightptr->pos[0] = 0;
+            focoobj_ptr->lightptr->pos[1] = (*sel_ptr)->max.y;
+            focoobj_ptr->lightptr->pos[2] = 0;
+
+            focoobj_ptr->lightptr->dir[0] = 0;
+            focoobj_ptr->lightptr->dir[1] = 0;
+            focoobj_ptr->lightptr->dir[2] = -1;
+        }
+        else
+        {
+            focoobj_ptr->lightptr->pos[0] = 0;
+            focoobj_ptr->lightptr->pos[1] = (*sel_ptr)->min.y;
+            focoobj_ptr->lightptr->pos[2] = 0;
+
+            focoobj_ptr->lightptr->dir[0] = 0;
+            focoobj_ptr->lightptr->dir[1] = -1;
+            focoobj_ptr->lightptr->dir[2] = 0;
+        }
+
+        mtransformacion.m[0] = 1;
+        mtransformacion.m[5] = 1;
+        mtransformacion.m[10] = 1;
+        mtransformacion.m[15] = 1;
+
+        mtransformacion.m[3] = focoobj_ptr->lightptr->pos[0];  // x
+        mtransformacion.m[7] = focoobj_ptr->lightptr->pos[1];  // y
+        mtransformacion.m[11] = focoobj_ptr->lightptr->pos[2]; // z
+
+        // Multiplicar por la derecha ( SR Local ( foco ) )
+        mxm(mtemp.m, focoobj_ptr->mptr->m, mtransformacion.m);
+
+        for (i = 0; i < 16; i++)
+            focoobj_ptr->mptr->m[i] = mtemp.m[i]; // SR Mundo
+    }
+}
+
 void aplicar_transformacion(object3d *objptr, mlist *matriz_transformacionptr, int sistema_referencia)
 {
     mlist *nueva_matrizptr = (mlist *)malloc(sizeof(mlist));
@@ -1701,6 +1750,9 @@ void undo()
         (*sel_ptr)->mptr = (*sel_ptr)->mptr->hptr;
         free(matriz_a_borrarptr);
     }
+
+    actualizar_foco();
+    print_estado();
 }
 
 // This function will be called whenever the user pushes one key
@@ -1842,6 +1894,7 @@ static void teklatua(unsigned char key, int x, int y)
             camara_activa = 0;
             cambiar_lista_activa(LISTA_OBJETOS);
         }
+        actualizar_foco();
         break;
     case 'P':
     case 'p':
@@ -2057,6 +2110,7 @@ int main(int argc, char **argv)
     ald_lokala = 1;
     camara_ptr = 0;
     obj_ptr = 0;
+    mmodelview_ptr = 0;
     focoobj_ptr = 0;
     camara_activa = 1;
     tipo_camara = CAMARA_PERSPECTIVA;
@@ -2101,7 +2155,7 @@ int main(int argc, char **argv)
     (*sel_ptr)->mat = &(materiales[MATERIAL_BRONZE]);
     translacion(&matriz_transformacion, EJE_Y, DIR_ATRAS, 40);
     aplicar_transformacion((*sel_ptr), &matriz_transformacion, SISTEMA_LOCAL);
-    crear_luz((*sel_ptr), LUZ_FOCO, color_foco, 0, 0, 0, 0, 0, 0, cos(30));
+    crear_luz((*sel_ptr), LUZ_FOCO, color_foco, 0, 0, 0, 0, 0, 0, cos(0.2617994)); // El foco es especial, la pos y dir se ajustan dinamicamente, depende el obj seleccionado
     focoobj_ptr = (*sel_ptr);
 
     if (argc > 1)
@@ -2121,10 +2175,10 @@ int main(int argc, char **argv)
         translacion(&matriz_transformacion, EJE_X, DIR_ADELANTE, 240);
         aplicar_transformacion((*sel_ptr), &matriz_transformacion, SISTEMA_LOCAL);
 
-        read_from_file("box.obj", LISTA_OBJETOS);
-        (*sel_ptr)->mat = &(materiales[MATERIAL_CHROME]);
-        escalado(&matriz_transformacion, DIR_ADELANTE, PROPORCION_ESCALADO * 20);
-        aplicar_transformacion((*sel_ptr), &matriz_transformacion, SISTEMA_LOCAL);
+        // read_from_file("box.obj", LISTA_OBJETOS);
+        // (*sel_ptr)->mat = &(materiales[MATERIAL_CHROME]);
+        // escalado(&matriz_transformacion, DIR_ADELANTE, PROPORCION_ESCALADO * 20);
+        // aplicar_transformacion((*sel_ptr), &matriz_transformacion, SISTEMA_LOCAL);
 
         // read_from_file("cam.obj", LISTA_OBJETOS);
         // (*sel_ptr)->mat = &(materiales[MATERIAL_CHROME]);
