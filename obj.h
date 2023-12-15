@@ -118,6 +118,7 @@ typedef struct material
     color3 Ka;
     color3 Kd;
     color3 Ks;
+    double shine;
 } material;
 
 /****************************

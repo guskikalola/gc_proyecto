@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <time.h>
 // #include "cargar-triangulo.h"
 #include "obj.h"
 
@@ -61,6 +62,12 @@
 #define MATERIAL_CHROME 1
 #define MATERIAL_FLAT 2
 
+#define CONSTANT_ATTENUATION 0.01
+#define LINEAR_ATTENUATION 0
+#define QUADRATIC_ATTENUATION 0.0001
+
+#define APERTURA_FOCO 6 * (3.14159265 / 180)
+
 // testuraren informazioa
 // información de textura
 
@@ -93,6 +100,9 @@ light luz_ambiental;
 material materiales[4];
 
 object3d *focoobj_ptr;
+object3d *fococam_ptr;
+object3d *bombilla_ptr;
+object3d *sol_ptr;
 
 int camara_activa; // Si estamos viendo desde la camara o no ( en caso negativo vemos desde objeto )
 int tipo_camara;
@@ -150,11 +160,11 @@ void dibujar_linea(vertex p1, vertex p2, color3 color)
     else
         cambioj = 1 / (pcortemayor->coord.x - pcortemenor->coord.x);
 
-    if (pcortemayor->coord.x - pcortemenor->coord.x > 1000)
+    if (pcortemayor->coord.x - pcortemenor->coord.x > 800)
         return;
-    if (abs(pcortemayor->coord.y - pcortemenor->coord.y) > 1000)
+    if (abs(pcortemayor->coord.y - pcortemenor->coord.y) > 800)
         return;
-    if (abs(pcortemayor->coord.z - pcortemenor->coord.z) > 1000)
+    if (abs(pcortemayor->coord.z - pcortemenor->coord.z) > 800)
         return;
 
     for (j = 1; j > 0; j -= cambioj)
@@ -221,7 +231,8 @@ void print_estado()
     printf("------------(COMIENZO ESTADO)------------\n");
 
     print_matrizea2("Posición cámara:", camara_ptr->mptr);
-    print_matrizea2("Posición foco:", focoobj_ptr->mptr);
+    print_matrizea2("Posición foco objeto:", focoobj_ptr->mptr);
+    print_matrizea2("Posición foco cámara:", fococam_ptr->mptr);
     printf("\n");
 
     printf("Modo cámara (g): ");
@@ -255,6 +266,36 @@ void print_estado()
         printf("SI\n");
     else
         printf("NO\n");
+
+    printf("\n");
+
+    printf("Luces: \n");
+    printf("SOL (0) :");
+    if (sol_ptr != 0 && sol_ptr->lightptr->onoff == 1)
+        printf("ON\n");
+    else
+        printf("OFF\n");
+    printf("BOMBILLA (1) :");
+    if (bombilla_ptr != 0 && bombilla_ptr->lightptr->onoff == 1)
+        printf("ON\n");
+    else
+        printf("OFF\n");
+    printf("FOCO OBJETO (2) :");
+    if (focoobj_ptr != 0 && focoobj_ptr->lightptr->onoff == 1)
+        printf("ON\n");
+    else
+        printf("OFF\n");
+    printf("FOCO CAMARA (3) :");
+    if (fococam_ptr != 0 && fococam_ptr->lightptr->onoff == 1)
+        printf("ON\n");
+    else
+        printf("OFF\n");
+    printf("\n");
+
+    if (focoobj_ptr != 0)
+    {
+        printf("Color foco camara (9) : rgb (%.0f,%.0f,%.0f)\n", fococam_ptr->lightptr->I.r, fococam_ptr->lightptr->I.g, fococam_ptr->lightptr->I.b);
+    }
 
     printf("------------(FIN ESTADO)------------\n");
 }
@@ -445,8 +486,8 @@ int aplicar_mperspectiva(vertex *pptr, double m[16])
     // printf(" 1 ptemp.x %f\n", ptemp.x);
     // printf(" 1 pptr->x %f\n", pptr->x);
     // printf(" 1 w %f\n", w);
-    pptr->coord.x = (ptemp.coord.x / w) * 500;
-    pptr->coord.y = (ptemp.coord.y / w) * 500;
+    pptr->coord.x = (ptemp.coord.x / w);
+    pptr->coord.y = (ptemp.coord.y / w);
     pptr->coord.z = -(ptemp.coord.z / abs(w));
     pptr->u = ptemp.u;
     pptr->v = ptemp.v;
@@ -457,6 +498,13 @@ int aplicar_mperspectiva(vertex *pptr, double m[16])
         return -2;
     }
 
+    if (pptr->coord.x > 1.5 || pptr->coord.x < -1.5)
+    {
+        return -2;
+    }
+
+    pptr->coord.x *= 500;
+    pptr->coord.y *= 500;
     pptr->coord.z *= 500;
 
     return 0;
@@ -519,6 +567,9 @@ void calcular_intesidad(object3d *objptr)
     vector3 VL; // V + L
     double mod_vl;
 
+    double distancia_luz;
+    double f_att;
+
     double sum_luces_r = 0;
     double sum_luces_g = 0;
     double sum_luces_b = 0;
@@ -577,20 +628,23 @@ void calcular_intesidad(object3d *objptr)
             if (luzptr->lightptr->onoff == 0)
                 continue;
 
+            if (objptr->lightptr == luzptr->lightptr)
+                continue;
+
             if (luzptr->lightptr->type == LUZ_POSICIONAL || luzptr->lightptr->type == LUZ_FOCO)
             {
 
                 // Calcular posicion de la luz en el SR de la camara ( le sumamos la pos de la luz dentro del obj, offset )
-                pluz.x = luzptr->mptr->m[3]; //+ luzptr->lightptr->pos[0];
-                pluz.y = luzptr->mptr->m[7];// + luzptr->lightptr->pos[1];
-                pluz.z = luzptr->mptr->m[11];// + luzptr->lightptr->pos[2]; // SR Mundo
+                pluz.x = luzptr->mptr->m[3];  //+ luzptr->lightptr->pos[0];
+                pluz.y = luzptr->mptr->m[7];  // + luzptr->lightptr->pos[1];
+                pluz.z = luzptr->mptr->m[11]; // + luzptr->lightptr->pos[2]; // SR Mundo
 
                 mxp(&pluz_cam, mcsr_observador.m, pluz); // SR Camara
 
                 // Calcular vector hacia la luz ( luz - vertice )  ---  L esta en el SR de la Camara
-                L.x = pvert_cam.x - pluz_cam.x ;
-                L.y =  pvert_cam.y - pluz_cam.y ;
-                L.z =   pvert_cam.z - pluz_cam.z; // SR Camara
+                L.x = pluz_cam.x - pvert_cam.x;
+                L.y = pluz_cam.y - pvert_cam.y;
+                L.z = pluz_cam.z - pvert_cam.z; // SR Camara
 
                 normalizar_vec(&L);
 
@@ -610,14 +664,14 @@ void calcular_intesidad(object3d *objptr)
                     dir_local.z = luzptr->lightptr->dir[2]; // SR Local ( Luz )
 
                     mxvec(&dir, luzptr->mptr->m, dir_local); // SR Mundo
-                    // dir.x = luzptr->mptr->m[2];
-                    // dir.y = luzptr->mptr->m[6];
-                    // dir.z = luzptr->mptr->m[10]; // SR Mundo
+                    dir.x = -luzptr->mptr->m[2];
+                    dir.y = -luzptr->mptr->m[6];
+                    dir.z = -luzptr->mptr->m[10];            // SR Mundo
                     mxvec(&dir_cam, mcsr_observador.m, dir); // SR Camara
 
                     normalizar_vec(&dir_cam);
 
-                    printf("dir_cam (%f,%f,%f)\n", dir_cam.x, dir_cam.y, dir_cam.z);
+                    // printf("dir_cam (%f,%f,%f)\n", dir_cam.x, dir_cam.y, dir_cam.z);
 
                     // glBegin(GL_LINES);
                     // glColor3ub(134, 134, 134);
@@ -628,7 +682,7 @@ void calcular_intesidad(object3d *objptr)
                     // // glVertex3d(L.x * 20, L.y * 20, L.z * 20);
                     // glEnd();
 
-                    FL = -dir_local.x * L.x + -dir_local.y * L.y + -dir_local.z * L.z;
+                    FL = -dir_cam.x * L.x + -dir_cam.y * L.y + -dir_cam.z * L.z; // F = dir_cam
 
                     if (FL < luzptr->lightptr->aperture) // No se ilumina
                         NL = 0;
@@ -655,11 +709,17 @@ void calcular_intesidad(object3d *objptr)
                 // printf("N_cam (%f,%f,%f)\n", N_cam.x, N_cam.y, N_cam.z);
             }
 
+            // Calcular factor de atenuación de la luz
+            distancia_luz = sqrt(pow(pluz_cam.x - pvert_cam.x, 2) + pow(pluz_cam.y - pvert_cam.y, 2) + pow(pluz_cam.z - pvert_cam.z, 2));
+            f_att = 1.0 / (CONSTANT_ATTENUATION + LINEAR_ATTENUATION * distancia_luz + QUADRATIC_ATTENUATION * pow(distancia_luz, 2));
+            if (luzptr->lightptr->type == LUZ_DIRECCIONAL || f_att > 1)
+                f_att = 1;
+            // f_att = 1;
+
             // printf("NL = %f\n", NL);
-            sum_luces_r += NL * luzptr->lightptr->I.r * objptr->mat->Kd.r; // N*Li*Ii*Kd
-            sum_luces_g += NL * luzptr->lightptr->I.g * objptr->mat->Kd.g; // N*Li*Ii*Kd
-            sum_luces_g += NL * luzptr->lightptr->I.b * objptr->mat->Kd.b; // N*Li*Ii*Kd
-            // printf("sum_luces (%f,%f,%f)\n", sum_luces_r, sum_luces_g, sum_luces_b);
+            sum_luces_r += f_att * NL * luzptr->lightptr->I.r * objptr->mat->Kd.r; // N*Li*Ii*Kd
+            sum_luces_g += f_att * NL * luzptr->lightptr->I.g * objptr->mat->Kd.g; // N*Li*Ii*Kd
+            sum_luces_g += f_att * NL * luzptr->lightptr->I.b * objptr->mat->Kd.b; // N*Li*Ii*Kd
 
             // Calcular vector especular, reflejo de L ---  H esta en el SR de la Camara
 
@@ -692,10 +752,15 @@ void calcular_intesidad(object3d *objptr)
 
             if (NH < 0)
                 NH = 0; // max ( 0, N*L )
+            else
+            {
+                // Aplicar shine
+                NH = pow(NH, luzptr->mat->shine);
+            }
 
-            sum_espec_r += NH * luzptr->lightptr->I.r * objptr->mat->Ks.r; // ((N*H)^ns * Ii * Ks)
-            sum_espec_g += NH * luzptr->lightptr->I.g * objptr->mat->Ks.g; // ((N*H)^ns * Ii * Ks)
-            sum_espec_b += NH * luzptr->lightptr->I.b * objptr->mat->Ks.b; // ((N*H)^ns * Ii * Ks)
+            sum_espec_r += f_att * NH * luzptr->lightptr->I.r * objptr->mat->Ks.r; // ((N*H)^ns * Ii * Ks)
+            sum_espec_g += f_att * NH * luzptr->lightptr->I.g * objptr->mat->Ks.g; // ((N*H)^ns * Ii * Ks)
+            sum_espec_b += f_att * NH * luzptr->lightptr->I.b * objptr->mat->Ks.b; // ((N*H)^ns * Ii * Ks)
         }
 
         /*
@@ -712,6 +777,17 @@ void calcular_intesidad(object3d *objptr)
         vptr->intesidad.g = intensidad_ambiental_g + sum_luces_g + sum_espec_g;
 
         vptr->intesidad.b = intensidad_ambiental_b + sum_luces_b + sum_espec_b;
+
+        if (objptr->lightptr != 0 && objptr->lightptr->onoff != 0)
+        {
+            vptr->intesidad.r = objptr->lightptr->I.r;
+
+            vptr->intesidad.g = objptr->lightptr->I.g;
+
+            vptr->intesidad.b = objptr->lightptr->I.b;
+        }
+
+        // printf("%f %f %f\n",vptr->intesidad.r,vptr->intesidad.g,vptr->intesidad.b);
     }
 }
 
@@ -1321,6 +1397,7 @@ static void marraztu(void)
     {
         dibujar_triangulo((*sel_ptr), indexx);
     }
+
     glFlush();
 }
 
@@ -1577,7 +1654,7 @@ void actualizar_foco()
 
             focoobj_ptr->lightptr->dir[0] = 0;
             focoobj_ptr->lightptr->dir[1] = 0;
-            focoobj_ptr->lightptr->dir[2] = -1;
+            focoobj_ptr->lightptr->dir[2] = 1;
         }
         else
         {
@@ -1587,7 +1664,7 @@ void actualizar_foco()
 
             focoobj_ptr->lightptr->dir[0] = 0;
             focoobj_ptr->lightptr->dir[1] = 0;
-            focoobj_ptr->lightptr->dir[2] = -1;
+            focoobj_ptr->lightptr->dir[2] = 1;
         }
 
         mtransformacion.m[0] = 1;
@@ -1604,6 +1681,61 @@ void actualizar_foco()
 
         for (i = 0; i < 16; i++)
             focoobj_ptr->mptr->m[i] = mtemp.m[i]; // SR Mundo
+    }
+}
+
+void actualizar_hijo(object3d *objptr)
+{
+    int i;
+    vector3 vec_z;
+    vector3 vec_z_srcam;
+    mlist mtransformacion;
+    mlist mtemp;
+    object3d *child;
+
+    if (objptr->child != 0)
+    {
+        child = objptr->child;
+
+        // Actualizar matriz del hijo
+        // Copiar Mobj del objeto seleccionado al foco
+        for (i = 0; i < 16; i++)
+        {
+            child->mptr->m[i] = (*sel_ptr)->mptr->m[i]; // SR Mundo
+            mtransformacion.m[i] = 0;
+        }
+
+        // Si el objeto es una luz actualizar los valores necesarios
+        if (child->lightptr != 0)
+        {
+            mtransformacion.m[0] = 1;
+            mtransformacion.m[5] = 1;
+            mtransformacion.m[10] = 1;
+            mtransformacion.m[15] = 1;
+
+            mtransformacion.m[3] = child->lightptr->pos[0];  // x
+            mtransformacion.m[7] = child->lightptr->pos[1];  // y
+            mtransformacion.m[11] = child->lightptr->pos[2]; // z
+
+            // Multiplicar por la derecha ( SR Local ( luz ) )
+            mxm(mtemp.m, child->mptr->m, mtransformacion.m);
+
+            for (i = 0; i < 16; i++)
+                child->mptr->m[i] = mtemp.m[i]; // SR Mundo
+        }
+
+        // Profundizar en la jerarquia
+        actualizar_hijo(child);
+    }
+}
+
+void cambiar_luz_foco_camara()
+{
+    if (fococam_ptr != 0)
+    {
+        fococam_ptr->lightptr->I.r = 255 * ((float)rand() / RAND_MAX);
+        fococam_ptr->lightptr->I.g = 255 * ((float)rand() / RAND_MAX);
+        fococam_ptr->lightptr->I.b = 255 * ((float)rand() / RAND_MAX);
     }
 }
 
@@ -1625,7 +1757,7 @@ void aplicar_transformacion(object3d *objptr, mlist *matriz_transformacionptr, i
     nueva_matrizptr->hptr = objptr->mptr;
     objptr->mptr = nueva_matrizptr;
 
-    actualizar_foco();
+    actualizar_hijo(objptr);
 }
 
 // Hace que la camara no pueda estar a menos de X distancia del objetivo
@@ -1684,7 +1816,6 @@ void tratar_transformacion_modo_analisis(int eje, int dir)
     // print_matrizea2("Mcam:\n", camara_ptr->mptr);
     // print_matrizea2("Mobj:\n", obj_ptr->mptr);
     ajustar_distancia_analisis();
-    print_estado();
 }
 
 void tratar_transformacion(int eje, int dir)
@@ -1723,8 +1854,6 @@ void tratar_transformacion(int eje, int dir)
         aplicar_transformacion((*sel_ptr), &matriz_transformacion, SISTEMA_LOCAL); // La camara siempre en sis.local
     else
         aplicar_transformacion((*sel_ptr), &matriz_transformacion, ald_lokala);
-
-    print_estado();
 }
 
 void x_aldaketa(int dir)
@@ -1763,8 +1892,8 @@ void undo()
         free(matriz_a_borrarptr);
     }
 
-    actualizar_foco();
-    print_estado();
+    actualizar_hijo((*sel_ptr));
+    // actualizar_foco();
 }
 
 // This function will be called whenever the user pushes one key
@@ -1892,7 +2021,7 @@ static void teklatua(unsigned char key, int x, int y)
             cambiar_lista_activa(LISTA_CAMARAS);
         // else if (camara_activa == 1)
         //     cambiar_lista_activa(LISTA_LUCES);
-        actualizar_foco();
+        // actualizar_foco();
         break;
     case 'C':
         if (camara_activa == 0)
@@ -1906,7 +2035,7 @@ static void teklatua(unsigned char key, int x, int y)
             camara_activa = 0;
             cambiar_lista_activa(LISTA_OBJETOS);
         }
-        actualizar_foco();
+        // actualizar_foco();
         break;
     case 'P':
     case 'p':
@@ -1962,8 +2091,8 @@ static void teklatua(unsigned char key, int x, int y)
                           fclose(obj_file);
                           }
                  break; */
-    case '1':
-        if (toggle_luz(2) == 1)
+    case '0':
+        if (toggle_luz(3) == 1)
         {
             printf("SOL ENCENDIDO\n");
         }
@@ -1972,8 +2101,8 @@ static void teklatua(unsigned char key, int x, int y)
             printf("SOL APAGADO\n");
         }
         break;
-    case '2':
-        if (toggle_luz(1) == 1)
+    case '1':
+        if (toggle_luz(2) == 1)
         {
             printf("BOMBILLA ENCENDIDA\n");
         }
@@ -1982,19 +2111,32 @@ static void teklatua(unsigned char key, int x, int y)
             printf("BOMBILLA APAGADA\n");
         }
         break;
-    case '3':
-        if (toggle_luz(0) == 1)
+    case '2':
+        if (toggle_luz(1) == 1)
         {
-            printf("FOCO ENCENDIDO\n");
+            printf("FOCO OBJ ENCENDIDO\n");
         }
         else
         {
-            printf("FOCO APAGADO\n");
+            printf("FOCO OBJ APAGADO\n");
         }
+        break;
+    case '3':
+        if (toggle_luz(0) == 1)
+        {
+            printf("FOCO CAM ENCENDIDO\n");
+        }
+        else
+        {
+            printf("FOCO CAM APAGADO\n");
+        }
+        break;
+    case '9':
+        cambiar_luz_foco_camara();
         break;
     case 9: /* <TAB> */
         siguiente_elemento_lista();
-        actualizar_foco();
+        // actualizar_foco();
         break;
     case 27: // <ESC>
         exit(0);
@@ -2005,11 +2147,14 @@ static void teklatua(unsigned char key, int x, int y)
 
     // The screen must be drawn to show the new triangle
     glutPostRedisplay();
+
+    print_estado();
 }
 
 void inicializar_materiales()
 {
     // Materiales a mano
+    // http://www.it.hiof.no/~borres/j3d/explain/light/p-materials.html
 
     material *bronze = (material *)malloc(sizeof(material));
     // Bronze
@@ -2017,6 +2162,7 @@ void inicializar_materiales()
     float[] mat_ambient ={ 0.2125f, 0.1275f, 0.054f, 1.0f };
     float[] mat_diffuse ={ 0.714f, 0.4284f, 0.18144f, 1.0f };
     float[] mat_specular ={ 0.393548f, 0.271906f, 0.166721f, 1.0f };
+    float shine = 27.8974f;
     */
     // 0.2125f, 0.1275f, 0.054f
     bronze->Ka.r = 0.2125;
@@ -2033,6 +2179,8 @@ void inicializar_materiales()
     bronze->Ks.g = 0.271906;
     bronze->Ks.b = 0.166721;
 
+    bronze->shine = 25.6;
+
     materiales[0] = *bronze;
 
     material *chrome = (material *)malloc(sizeof(material));
@@ -2040,6 +2188,7 @@ void inicializar_materiales()
     float[] mat_ambient ={0.25f, 0.25f, 0.25f, 1.0f  };
     float[] mat_diffuse ={0.4f, 0.4f, 0.4f, 1.0f };
     float[] mat_specular ={0.774597f, 0.774597f, 0.774597f, 1.0f };
+    float shine = 76.8f;
     */
 
     chrome->Ka.r = 0.25;
@@ -2053,6 +2202,8 @@ void inicializar_materiales()
     chrome->Ks.r = 0.774597;
     chrome->Ks.g = 0.774597;
     chrome->Ks.b = 0.774597;
+
+    chrome->shine = 76.8;
 
     materiales[1] = *chrome;
 
@@ -2069,6 +2220,8 @@ void inicializar_materiales()
     flat->Ks.r = 0;
     flat->Ks.g = 0;
     flat->Ks.b = 0;
+
+    flat->shine = 0;
 
     materiales[2] = *flat;
 }
@@ -2092,6 +2245,8 @@ int main(int argc, char **argv)
     color_foco.g = 255;
     color_foco.b = 255;
 
+    srand(time(0));
+
     printf(" Triangeluak: barneko puntuak eta testura\n Triángulos con puntos internos y textura \n");
     printf("Press <ESC> to finish\n");
     glutInit(&argc, argv);
@@ -2114,7 +2269,7 @@ int main(int argc, char **argv)
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     glEnable(GL_DEPTH_TEST); // activar el test de profundidad (Z-buffer)
     denak = 1;
-    lineak = 1;
+    lineak = 0;
     objektuak = 1;
     foptr = 0;
     sel_ptr = 0;
@@ -2124,10 +2279,13 @@ int main(int argc, char **argv)
     obj_ptr = 0;
     mmodelview_ptr = 0;
     focoobj_ptr = 0;
+    fococam_ptr = 0;
+    bombilla_ptr = 0;
+    sol_ptr = 0;
     camara_activa = 1;
     tipo_camara = CAMARA_PERSPECTIVA;
     ultimo_es_visible = 0;
-    dibujar_no_visible = 1;
+    dibujar_no_visible = 0;
     dibujar_normales = 1;
 
     inicializar_materiales();
@@ -2154,6 +2312,7 @@ int main(int argc, char **argv)
     escalado(&matriz_transformacion, DIR_ADELANTE, PROPORCION_ESCALADO * 10);
     aplicar_transformacion((*sel_ptr), &matriz_transformacion, SISTEMA_LOCAL);
     crear_luz((*sel_ptr), LUZ_DIRECCIONAL, color_sol, 0, 0, 0, 0, 1, 0, 0);
+    sol_ptr = (*sel_ptr);
 
     // Cargar Bombilla ( luz posicional )
     read_from_file("cam.obj", LISTA_LUCES);
@@ -2161,14 +2320,24 @@ int main(int argc, char **argv)
     translacion(&matriz_transformacion, EJE_Y, DIR_ATRAS, 40);
     aplicar_transformacion((*sel_ptr), &matriz_transformacion, SISTEMA_LOCAL);
     crear_luz((*sel_ptr), LUZ_POSICIONAL, color_bombilla, 0, 0, 0, 0, 0, 0, 0);
+    bombilla_ptr = (*sel_ptr);
 
-    // Cargar Foco ( luz foco )
+    // Cargar Foco obj ( luz foco )
     read_from_file("cam.obj", LISTA_LUCES);
     (*sel_ptr)->mat = &(materiales[MATERIAL_BRONZE]);
     translacion(&matriz_transformacion, EJE_Y, DIR_ATRAS, 40);
     aplicar_transformacion((*sel_ptr), &matriz_transformacion, SISTEMA_LOCAL);
-    crear_luz((*sel_ptr), LUZ_FOCO, color_foco, 0, 0, 0, 0, 0, 0, cos(0.2617994)); // El foco es especial, la pos y dir se ajustan dinamicamente, depende el obj seleccionado
+    crear_luz((*sel_ptr), LUZ_FOCO, color_foco, 0, (*sel_ptr)->min.y, 0, 0, 0, 0, cos(APERTURA_FOCO)); // El foco es especial, la pos y dir se ajustan dinamicamente, depende el obj seleccionado
     focoobj_ptr = (*sel_ptr);
+
+    // Cargar Foco camara ( luz foco )
+    read_from_file("cam.obj", LISTA_LUCES);
+    (*sel_ptr)->mat = &(materiales[MATERIAL_BRONZE]);
+    translacion(&matriz_transformacion, EJE_Y, DIR_ATRAS, 40);
+    aplicar_transformacion((*sel_ptr), &matriz_transformacion, SISTEMA_LOCAL);
+    crear_luz((*sel_ptr), LUZ_FOCO, color_foco, 0, (*sel_ptr)->max.y, 0, 0, 0, 0, cos(APERTURA_FOCO)); // El foco es especial, la pos y dir se ajustan dinamicamente, depende el obj seleccionado
+    fococam_ptr = (*sel_ptr);
+    camara_ptr->child = fococam_ptr;
 
     if (argc > 1)
     {
@@ -2183,7 +2352,7 @@ int main(int argc, char **argv)
         aplicar_transformacion((*sel_ptr), &matriz_transformacion, SISTEMA_LOCAL);
 
         read_from_file("x_wing.obj", LISTA_OBJETOS);
-        (*sel_ptr)->mat = &(materiales[MATERIAL_FLAT]);
+        (*sel_ptr)->mat = &(materiales[MATERIAL_CHROME]);
         translacion(&matriz_transformacion, EJE_X, DIR_ADELANTE, 240);
         aplicar_transformacion((*sel_ptr), &matriz_transformacion, SISTEMA_LOCAL);
 

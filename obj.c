@@ -319,6 +319,7 @@ int read_wavefront(char *file_name, object3d *object_ptr)
     }
 
     object_ptr->child = 0;
+    object_ptr->lightptr = 0;
 
     return (0);
 }
