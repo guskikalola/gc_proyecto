@@ -659,11 +659,11 @@ void calcular_intesidad(object3d *objptr)
                 if (luzptr->lightptr->type == LUZ_FOCO && NL > 0)
                 {
                     // Calcular direccion en el sistema de referencia de la camara ( offset de direccion + Vector Z (0,0,1) )
-                    dir_local.x = luzptr->lightptr->dir[0];
-                    dir_local.y = luzptr->lightptr->dir[1];
-                    dir_local.z = luzptr->lightptr->dir[2]; // SR Local ( Luz )
+                    // dir_local.x = luzptr->lightptr->dir[0];
+                    // dir_local.y = luzptr->lightptr->dir[1];
+                    // dir_local.z = luzptr->lightptr->dir[2]; // SR Local ( Luz )
 
-                    mxvec(&dir, luzptr->mptr->m, dir_local); // SR Mundo
+                    // mxvec(&dir, luzptr->mptr->m, dir_local); // SR Mundo
                     dir.x = -luzptr->mptr->m[2];
                     dir.y = -luzptr->mptr->m[6];
                     dir.z = -luzptr->mptr->m[10];            // SR Mundo
@@ -673,14 +673,14 @@ void calcular_intesidad(object3d *objptr)
 
                     // printf("dir_cam (%f,%f,%f)\n", dir_cam.x, dir_cam.y, dir_cam.z);
 
-                    // glBegin(GL_LINES);
-                    // glColor3ub(134, 134, 134);
-                    // glVertex3d(0, 0, 0);
-                    // glVertex3d(dir_cam.x * 20, dir_cam.y * 20, dir_cam.z * 20);
+                    glBegin(GL_LINES);
+                     glColor3ub(134, 134, 134);
+                     glVertex3d(0, 0, 0);
+                     glVertex3d(dir_cam.x * 20, dir_cam.y * 20, dir_cam.z * 20);
                     // // glColor3ub(255, 255, 134);
                     // // glVertex3d(0, 0, 0);
                     // // glVertex3d(L.x * 20, L.y * 20, L.z * 20);
-                    // glEnd();
+                     glEnd();
 
                     FL = -dir_cam.x * L.x + -dir_cam.y * L.y + -dir_cam.z * L.z; // F = dir_cam
 
@@ -1628,62 +1628,6 @@ void escalado(mlist *matriz_transformacion, int dir, float proporcion)
     }
 }
 
-void actualizar_foco()
-{
-    int i;
-    vector3 vec_z;
-    vector3 vec_z_srcam;
-    mlist mtransformacion;
-    mlist mtemp;
-
-    if (focoobj_ptr != 0)
-    {
-        // Copiar Mobj del objeto seleccionado al foco
-        for (i = 0; i < 16; i++)
-        {
-            focoobj_ptr->mptr->m[i] = (*sel_ptr)->mptr->m[i]; // SR Mundo
-            mtransformacion.m[i] = 0;
-        }
-
-        // Actualizar pos y dir del foco
-        if (lista_activa == LISTA_CAMARAS)
-        {
-            focoobj_ptr->lightptr->pos[0] = 0;
-            focoobj_ptr->lightptr->pos[1] = (*sel_ptr)->max.y;
-            focoobj_ptr->lightptr->pos[2] = 0;
-
-            focoobj_ptr->lightptr->dir[0] = 0;
-            focoobj_ptr->lightptr->dir[1] = 0;
-            focoobj_ptr->lightptr->dir[2] = 1;
-        }
-        else
-        {
-            focoobj_ptr->lightptr->pos[0] = 0;
-            focoobj_ptr->lightptr->pos[1] = (*sel_ptr)->min.y;
-            focoobj_ptr->lightptr->pos[2] = 0;
-
-            focoobj_ptr->lightptr->dir[0] = 0;
-            focoobj_ptr->lightptr->dir[1] = 0;
-            focoobj_ptr->lightptr->dir[2] = 1;
-        }
-
-        mtransformacion.m[0] = 1;
-        mtransformacion.m[5] = 1;
-        mtransformacion.m[10] = 1;
-        mtransformacion.m[15] = 1;
-
-        mtransformacion.m[3] = focoobj_ptr->lightptr->pos[0];  // x
-        mtransformacion.m[7] = focoobj_ptr->lightptr->pos[1];  // y
-        mtransformacion.m[11] = focoobj_ptr->lightptr->pos[2]; // z
-
-        // Multiplicar por la derecha ( SR Local ( foco ) )
-        mxm(mtemp.m, focoobj_ptr->mptr->m, mtransformacion.m);
-
-        for (i = 0; i < 16; i++)
-            focoobj_ptr->mptr->m[i] = mtemp.m[i]; // SR Mundo
-    }
-}
-
 void actualizar_hijo(object3d *objptr)
 {
     int i;
@@ -1701,12 +1645,12 @@ void actualizar_hijo(object3d *objptr)
         // Copiar Mobj del objeto seleccionado al foco
         for (i = 0; i < 16; i++)
         {
-            child->mptr->m[i] = (*sel_ptr)->mptr->m[i]; // SR Mundo
+            child->mptr->m[i] = (objptr)->mptr->m[i]; // SR Mundo
             mtransformacion.m[i] = 0;
         }
 
         // Si el objeto es una luz actualizar los valores necesarios
-        if (child->lightptr != 0)
+        if (child->lightptr != 0 && (child->lightptr->type == LUZ_POSICIONAL || child->lightptr->type == LUZ_FOCO))
         {
             mtransformacion.m[0] = 1;
             mtransformacion.m[5] = 1;
@@ -1716,6 +1660,8 @@ void actualizar_hijo(object3d *objptr)
             mtransformacion.m[3] = child->lightptr->pos[0];  // x
             mtransformacion.m[7] = child->lightptr->pos[1];  // y
             mtransformacion.m[11] = child->lightptr->pos[2]; // z
+
+            printf("min.y=%f\n", child->lightptr->pos[1]);
 
             // Multiplicar por la derecha ( SR Local ( luz ) )
             mxm(mtemp.m, child->mptr->m, mtransformacion.m);
@@ -1727,6 +1673,24 @@ void actualizar_hijo(object3d *objptr)
         // Profundizar en la jerarquia
         actualizar_hijo(child);
     }
+}
+
+void actualizar_foco_objeto()
+{
+    object3d *auxptr;
+
+    for (auxptr = lucesptr; auxptr != 0; auxptr = auxptr->hptr)
+    {
+        if (auxptr->child == focoobj_ptr)
+            auxptr->child = 0;
+    }
+
+    (obj_ptr)->child = focoobj_ptr;
+    
+    if (focoobj_ptr != 0)
+        focoobj_ptr->lightptr->pos[1] = (*sel_ptr)->min.y;
+
+    actualizar_hijo(obj_ptr);
 }
 
 void cambiar_luz_foco_camara()
@@ -1893,7 +1857,6 @@ void undo()
     }
 
     actualizar_hijo((*sel_ptr));
-    // actualizar_foco();
 }
 
 // This function will be called whenever the user pushes one key
@@ -2021,7 +1984,6 @@ static void teklatua(unsigned char key, int x, int y)
             cambiar_lista_activa(LISTA_CAMARAS);
         // else if (camara_activa == 1)
         //     cambiar_lista_activa(LISTA_LUCES);
-        // actualizar_foco();
         break;
     case 'C':
         if (camara_activa == 0)
@@ -2035,7 +1997,7 @@ static void teklatua(unsigned char key, int x, int y)
             camara_activa = 0;
             cambiar_lista_activa(LISTA_OBJETOS);
         }
-        // actualizar_foco();
+
         break;
     case 'P':
     case 'p':
@@ -2136,7 +2098,8 @@ static void teklatua(unsigned char key, int x, int y)
         break;
     case 9: /* <TAB> */
         siguiente_elemento_lista();
-        // actualizar_foco();
+        if (lista_activa == LISTA_OBJETOS)
+            actualizar_foco_objeto();
         break;
     case 27: // <ESC>
         exit(0);
@@ -2327,15 +2290,15 @@ int main(int argc, char **argv)
     (*sel_ptr)->mat = &(materiales[MATERIAL_BRONZE]);
     translacion(&matriz_transformacion, EJE_Y, DIR_ATRAS, 40);
     aplicar_transformacion((*sel_ptr), &matriz_transformacion, SISTEMA_LOCAL);
-    crear_luz((*sel_ptr), LUZ_FOCO, color_foco, 0, (*sel_ptr)->min.y, 0, 0, 0, 0, cos(APERTURA_FOCO)); // El foco es especial, la pos y dir se ajustan dinamicamente, depende el obj seleccionado
+    crear_luz((*sel_ptr), LUZ_FOCO, color_foco, 0, 0, 0, 1, 1, 0, cos(APERTURA_FOCO)); // El foco es especial, la pos se ajusta dinamicamente, depende el obj seleccionado
     focoobj_ptr = (*sel_ptr);
 
     // Cargar Foco camara ( luz foco )
     read_from_file("cam.obj", LISTA_LUCES);
     (*sel_ptr)->mat = &(materiales[MATERIAL_BRONZE]);
-    translacion(&matriz_transformacion, EJE_Y, DIR_ATRAS, 40);
+    translacion(&matriz_transformacion, EJE_Z, DIR_ATRAS, 40);
     aplicar_transformacion((*sel_ptr), &matriz_transformacion, SISTEMA_LOCAL);
-    crear_luz((*sel_ptr), LUZ_FOCO, color_foco, 0, (*sel_ptr)->max.y, 0, 0, 0, 0, cos(APERTURA_FOCO)); // El foco es especial, la pos y dir se ajustan dinamicamente, depende el obj seleccionado
+    crear_luz((*sel_ptr), LUZ_FOCO, color_foco, 0, (*sel_ptr)->max.y, 0, 0, 0, 0, cos(APERTURA_FOCO));
     fococam_ptr = (*sel_ptr);
     camara_ptr->child = fococam_ptr;
 
@@ -2375,6 +2338,9 @@ int main(int argc, char **argv)
 
     mperspectiva_ptr = (mlist *)malloc(sizeof(mlist));
     calcular_mperspectiva(mperspectiva_ptr, CAMARA_CONFIG_NEAR, CAMARA_CONFIG_FAR, CAMARA_CONFIG_RIGHT, CAMARA_CONFIG_LEFT, CAMARA_CONFIG_TOP, CAMARA_CONFIG_BOTTOM);
+
+    actualizar_hijo(camara_ptr);
+    actualizar_foco_objeto();
 
     glutMainLoop();
 
