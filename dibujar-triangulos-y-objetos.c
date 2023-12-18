@@ -2263,9 +2263,9 @@ int main(int argc, char **argv)
 
     // ------- Configurar luces
     // Configurar luz ambiental
-    luz_ambiental.I.r = 20;
-    luz_ambiental.I.g = 20;
-    luz_ambiental.I.b = 20;
+    luz_ambiental.I.r = 51;
+    luz_ambiental.I.g = 51;
+    luz_ambiental.I.b = 51;
 
     // Cargar SOL ( luz direccional )
     read_from_file("sun.obj", LISTA_LUCES);
