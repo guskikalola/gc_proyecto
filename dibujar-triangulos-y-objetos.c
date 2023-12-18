@@ -66,7 +66,7 @@
 #define LINEAR_ATTENUATION 0
 #define QUADRATIC_ATTENUATION 0.0001
 
-#define APERTURA_FOCO 6 * (3.14159265 / 180)
+#define APERTURA_FOCO 12 * (3.14159265 / 180)
 
 // testuraren informazioa
 // información de textura
@@ -602,6 +602,18 @@ void calcular_intesidad(object3d *objptr)
 
         vptr = &(objptr->vertex_table[i]);
 
+        // Si una luz esta encendida se va a iluminar con el color que emite
+        if (objptr->lightptr != 0 && objptr->lightptr->onoff != 0)
+        {
+            vptr->intesidad.r = objptr->lightptr->I.r;
+
+            vptr->intesidad.g = objptr->lightptr->I.g;
+
+            vptr->intesidad.b = objptr->lightptr->I.b;
+
+            continue;
+        }
+
         // Calcular vector normal del vertice en el SR de la camara ( Solo afectan las rotaciones )
         N_local.x = vptr->N[0];
         N_local.y = vptr->N[1];
@@ -635,9 +647,9 @@ void calcular_intesidad(object3d *objptr)
             {
 
                 // Calcular posicion de la luz en el SR de la camara ( le sumamos la pos de la luz dentro del obj, offset )
-                pluz.x = luzptr->mptr->m[3];  //+ luzptr->lightptr->pos[0];
-                pluz.y = luzptr->mptr->m[7];  // + luzptr->lightptr->pos[1];
-                pluz.z = luzptr->mptr->m[11]; // + luzptr->lightptr->pos[2]; // SR Mundo
+                pluz.x = luzptr->mptr->m[3];
+                pluz.y = luzptr->mptr->m[7];
+                pluz.z = luzptr->mptr->m[11]; // SR Mundo
 
                 mxp(&pluz_cam, mcsr_observador.m, pluz); // SR Camara
 
@@ -658,12 +670,8 @@ void calcular_intesidad(object3d *objptr)
 
                 if (luzptr->lightptr->type == LUZ_FOCO && NL > 0)
                 {
-                    // Calcular direccion en el sistema de referencia de la camara ( offset de direccion + Vector Z (0,0,1) )
-                    // dir_local.x = luzptr->lightptr->dir[0];
-                    // dir_local.y = luzptr->lightptr->dir[1];
-                    // dir_local.z = luzptr->lightptr->dir[2]; // SR Local ( Luz )
+                    // Calcular direccion en el sistema de referencia de la camara ( Vector Z de la luz )
 
-                    // mxvec(&dir, luzptr->mptr->m, dir_local); // SR Mundo
                     dir.x = -luzptr->mptr->m[2];
                     dir.y = -luzptr->mptr->m[6];
                     dir.z = -luzptr->mptr->m[10];            // SR Mundo
@@ -673,18 +681,18 @@ void calcular_intesidad(object3d *objptr)
 
                     // printf("dir_cam (%f,%f,%f)\n", dir_cam.x, dir_cam.y, dir_cam.z);
 
-                    glBegin(GL_LINES);
-                    glColor3ub(134, 134, 134);
-                    glVertex3d(0, 0, 0);
-                    glVertex3d(dir_cam.x * 20, dir_cam.y * 20, dir_cam.z * 20);
+                    // glBegin(GL_LINES);
+                    // glColor3ub(134, 134, 134);
+                    // glVertex3d(0, 0, 0);
+                    // glVertex3d(dir_cam.x * 20, dir_cam.y * 20, dir_cam.z * 20);
                     // // glColor3ub(255, 255, 134);
                     // // glVertex3d(0, 0, 0);
                     // // glVertex3d(L.x * 20, L.y * 20, L.z * 20);
-                    glEnd();
+                    // glEnd();
 
                     FL = -dir_cam.x * L.x + -dir_cam.y * L.y + -dir_cam.z * L.z; // F = dir_cam
 
-                    if (FL < luzptr->lightptr->aperture) // No se ilumina
+                    if (FL < luzptr->lightptr->aperture) // Si se cumple, no se ilumina
                         NL = 0;
                 }
             }
@@ -777,15 +785,6 @@ void calcular_intesidad(object3d *objptr)
         vptr->intesidad.g = intensidad_ambiental_g + sum_luces_g + sum_espec_g;
 
         vptr->intesidad.b = intensidad_ambiental_b + sum_luces_b + sum_espec_b;
-
-        if (objptr->lightptr != 0 && objptr->lightptr->onoff != 0)
-        {
-            vptr->intesidad.r = objptr->lightptr->I.r;
-
-            vptr->intesidad.g = objptr->lightptr->I.g;
-
-            vptr->intesidad.b = objptr->lightptr->I.b;
-        }
 
         // printf("%f %f %f\n",vptr->intesidad.r,vptr->intesidad.g,vptr->intesidad.b);
     }
@@ -1642,14 +1641,14 @@ void actualizar_hijo(object3d *objptr)
         child = objptr->child;
 
         // Actualizar matriz del hijo
-        // Copiar Mobj del objeto seleccionado al foco
+        // Copiar Mobj del objeto seleccionado al hijo
         for (i = 0; i < 16; i++)
         {
             child->mptr->m[i] = (objptr)->mptr->m[i]; // SR Mundo
             mtransformacion.m[i] = 0;
         }
 
-        // Si el objeto es una luz actualizar los valores necesarios
+        // Si el objeto es una luz con posicion ( luz posicional o foco ), actualizar los valores necesarios
         if (child->lightptr != 0 && (child->lightptr->type == LUZ_POSICIONAL || child->lightptr->type == LUZ_FOCO))
         {
             mtransformacion.m[0] = 1;
@@ -1668,6 +1667,7 @@ void actualizar_hijo(object3d *objptr)
 
             for (i = 0; i < 16; i++)
                 child->mptr->m[i] = mtemp.m[i]; // SR Mundo
+
         }
 
         // Profundizar en la jerarquia
@@ -1679,14 +1679,17 @@ void actualizar_foco_objeto()
 {
     object3d *auxptr;
 
+    // Eliminar el (hijo == foco) de todos los otros objetos
     for (auxptr = lucesptr; auxptr != 0; auxptr = auxptr->hptr)
     {
         if (auxptr->child == focoobj_ptr)
             auxptr->child = 0;
     }
 
+    // Asignar el foco como hijo al obj seleccionado
     (obj_ptr)->child = focoobj_ptr;
 
+    // Actualizar la posicion del foco a la altura del objeto
     if (focoobj_ptr != 0)
         focoobj_ptr->lightptr->pos[1] = (*sel_ptr)->min.y;
 
@@ -1720,6 +1723,11 @@ void aplicar_transformacion(object3d *objptr, mlist *matriz_transformacionptr, i
 
     nueva_matrizptr->hptr = objptr->mptr;
     objptr->mptr = nueva_matrizptr;
+
+    // if(objptr->child != 0)
+    // {
+    //     aplicar_transformacion(objptr->child, matriz_transformacionptr, sistema_referencia);
+    // }
 
     actualizar_hijo(objptr);
 }
@@ -2293,9 +2301,9 @@ int main(int argc, char **argv)
     // Cargar Foco obj ( luz foco )
     read_from_file("cam.obj", LISTA_LUCES);
     (*sel_ptr)->mat = &(materiales[MATERIAL_BRONZE]);
-    translacion(&matriz_transformacion, EJE_Y, DIR_ATRAS, 40);
+    rotacion(&matriz_transformacion, EJE_Z, DIR_ADELANTE, 3.14159265358979323846);
     aplicar_transformacion((*sel_ptr), &matriz_transformacion, SISTEMA_LOCAL);
-    crear_luz((*sel_ptr), LUZ_FOCO, color_foco, 0, 0, 0, 1, 1, 0, cos(APERTURA_FOCO)); // El foco es especial, la pos se ajusta dinamicamente, depende el obj seleccionado
+    crear_luz((*sel_ptr), LUZ_FOCO, color_foco, 0, 0, 0, 0, 0, 0, cos(APERTURA_FOCO)); // El foco es especial, la pos se ajusta dinamicamente, depende el obj seleccionado
     focoobj_ptr = (*sel_ptr);
 
     // Cargar Foco camara ( luz foco )
@@ -2315,7 +2323,7 @@ int main(int argc, char **argv)
     else
     {
         read_from_file("r_falke.obj", LISTA_OBJETOS);
-        (*sel_ptr)->mat = &(materiales[MATERIAL_BRONZE]);
+        (*sel_ptr)->mat = &(materiales[MATERIAL_FLAT]);
         translacion(&matriz_transformacion, EJE_X, DIR_ATRAS, 240);
         aplicar_transformacion((*sel_ptr), &matriz_transformacion, SISTEMA_LOCAL);
 
