@@ -674,13 +674,13 @@ void calcular_intesidad(object3d *objptr)
                     // printf("dir_cam (%f,%f,%f)\n", dir_cam.x, dir_cam.y, dir_cam.z);
 
                     glBegin(GL_LINES);
-                     glColor3ub(134, 134, 134);
-                     glVertex3d(0, 0, 0);
-                     glVertex3d(dir_cam.x * 20, dir_cam.y * 20, dir_cam.z * 20);
+                    glColor3ub(134, 134, 134);
+                    glVertex3d(0, 0, 0);
+                    glVertex3d(dir_cam.x * 20, dir_cam.y * 20, dir_cam.z * 20);
                     // // glColor3ub(255, 255, 134);
                     // // glVertex3d(0, 0, 0);
                     // // glVertex3d(L.x * 20, L.y * 20, L.z * 20);
-                     glEnd();
+                    glEnd();
 
                     FL = -dir_cam.x * L.x + -dir_cam.y * L.y + -dir_cam.z * L.z; // F = dir_cam
 
@@ -1686,7 +1686,7 @@ void actualizar_foco_objeto()
     }
 
     (obj_ptr)->child = focoobj_ptr;
-    
+
     if (focoobj_ptr != 0)
         focoobj_ptr->lightptr->pos[1] = (*sel_ptr)->min.y;
 
@@ -1751,7 +1751,7 @@ void tratar_transformacion_modo_analisis(int eje, int dir)
     int sistema_ref;
     // Si estamos con camara_activa y en modo analisis
     // solo disponemos de dos transformaciones ( y limitadas ):
-    // 1 . Rotacion :  Eje X y Eje Y
+    // 1 . Rotacion :  Eje X , Eje Y, Eje Z
     // 2 . Translacion : Eje Z
 
     switch (aldaketa)
@@ -1764,13 +1764,18 @@ void tratar_transformacion_modo_analisis(int eje, int dir)
         sistema_ref = SISTEMA_LOCAL;
         break;
     case ROTACION:
+        sistema_ref = SISTEMA_MUNDO;
+
         if (eje == EJE_X)
             rotacion_respecto_punto(&matriz_transformacion, obj_ptr, EJE_Y, dir, ANGULO_ROTACION);
         else if (eje == EJE_Y)
             rotacion_respecto_punto(&matriz_transformacion, obj_ptr, EJE_X, dir, ANGULO_ROTACION);
-        else
-            return;
-        sistema_ref = SISTEMA_MUNDO;
+        else // EJE_Z
+        {
+            rotacion(&matriz_transformacion, EJE_Z, dir, ANGULO_ROTACION);
+            sistema_ref = SISTEMA_LOCAL;
+        }
+
         break;
     default:
         return;
