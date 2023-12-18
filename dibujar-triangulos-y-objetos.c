@@ -1187,13 +1187,17 @@ void tratar_transformacion_modo_analisis(int eje, int dir)
         sistema_ref = SISTEMA_LOCAL;
         break;
     case ROTACION:
+        sistema_ref = SISTEMA_MUNDO;
+
         if (eje == EJE_X)
             rotacion_respecto_punto(&matriz_transformacion, obj_ptr, EJE_Y, dir, ANGULO_ROTACION);
         else if (eje == EJE_Y)
             rotacion_respecto_punto(&matriz_transformacion, obj_ptr, EJE_X, dir, ANGULO_ROTACION);
-        else
-            return;
-        sistema_ref = SISTEMA_MUNDO;
+        else // EJE_Z
+        {
+            rotacion(&matriz_transformacion, EJE_Z, dir, ANGULO_ROTACION);
+            sistema_ref = SISTEMA_LOCAL;
+        }
         break;
     default:
         return;
