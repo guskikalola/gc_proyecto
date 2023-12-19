@@ -2350,7 +2350,7 @@ int main(int argc, char **argv)
     (*sel_ptr)->mat = &(materiales[MATERIAL_BRONZE]);
     translacion(&matriz_transformacion, EJE_Z, DIR_ATRAS, 40);
     aplicar_transformacion((*sel_ptr), &matriz_transformacion, SISTEMA_LOCAL);
-    crear_luz((*sel_ptr), LUZ_FOCO, color_foco, 0, (*sel_ptr)->max.y, 0, 0, 0, 0, cos(APERTURA_FOCO));
+    crear_luz((*sel_ptr), LUZ_FOCO, color_foco, 0, (*sel_ptr)->max.y, 0, 0, 0, -1, cos(APERTURA_FOCO));
     fococam_ptr = (*sel_ptr);
     camara_ptr->child = fococam_ptr;
 
