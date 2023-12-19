@@ -792,7 +792,7 @@ void calcular_intesidad(object3d *objptr)
 
 // TODO: si miras a un objeto en tu misma pos va a dar error, siendo los resultados nan
 // Arreglo temporal: Poner la identidad en los vectores
-void look_at(object3d *observadorptr, object3d *objetivoptr)
+void look_at(object3d *observadorptr, punto objetivo)
 {
     int i;
     mlist *nueva_matrizptr = (mlist *)malloc(sizeof(mlist));
@@ -802,7 +802,7 @@ void look_at(object3d *observadorptr, object3d *objetivoptr)
 
     // Parametros: E, At, (Vp = (0,1,0))
     double e[3] = {observadorptr->mptr->m[3], observadorptr->mptr->m[7], observadorptr->mptr->m[11]};
-    double at[3] = {objetivoptr->mptr->m[3], objetivoptr->mptr->m[7], objetivoptr->mptr->m[11]};
+    double at[3] = {objetivo.x, objetivo.y, objetivo.z};
     double vp[3] = {0, 1, 0};
     // Buscamos: Zc, Xc, Yc
     double z_c[3];
@@ -1000,6 +1000,14 @@ void crear_luz(object3d *objptr, int tipo, color3 I, double pos_x, double pos_y,
     objptr->lightptr->pos[0] = pos_x;
     objptr->lightptr->pos[1] = pos_y;
     objptr->lightptr->pos[2] = pos_z;
+
+    // Direccion por defecto del foco, apuntar hacia donde mira el objeto
+    if (tipo == LUZ_FOCO && dir_x == 0 && dir_y == 0 && dir_z == 0)
+    {
+        dir_x = 0;
+        dir_y = 0;
+        dir_z = -1;
+    }
 
     objptr->lightptr->dir[0] = dir_x;
     objptr->lightptr->dir[1] = dir_y;
@@ -1630,11 +1638,13 @@ void escalado(mlist *matriz_transformacion, int dir, float proporcion)
 void actualizar_hijo(object3d *objptr)
 {
     int i;
-    vector3 vec_z;
-    vector3 vec_z_srcam;
+    vector3 dir_local;
+    vector3 dir_mundo;
+    // vector3 dir_cam;
     mlist mtransformacion;
     mlist mtemp;
     object3d *child;
+    punto pAt;
 
     if (objptr->child != 0)
     {
@@ -1668,6 +1678,31 @@ void actualizar_hijo(object3d *objptr)
             for (i = 0; i < 16; i++)
                 child->mptr->m[i] = mtemp.m[i]; // SR Mundo
 
+            // Aplicar rotación
+            if (child->lightptr->type == LUZ_FOCO)
+            {
+                dir_local.x = child->lightptr->dir[0];
+                dir_local.y = child->lightptr->dir[1];
+                dir_local.z = child->lightptr->dir[2];
+
+                mxvec(&dir_mundo, child->mptr->m, dir_local); // SR Mundo
+                // mxvec(&dir_cam, mcsr_observador.m, dir_mundo); // SR Camara
+
+                pAt.x = child->mptr->m[3] + dir_mundo.x * 2;
+                pAt.y = child->mptr->m[7] + dir_mundo.y * 2;
+                pAt.z = child->mptr->m[11] + dir_mundo.z * 2;
+                look_at(child, pAt);
+
+                glBegin(GL_LINES);
+                glColor3ub(134, 134, 134);
+                glVertex3d(0, 0, 0);
+                glVertex3d(dir_mundo.x * 20, dir_mundo.y * 20, dir_mundo.z * 20);
+                // // glColor3ub(255, 255, 134);
+                // // glVertex3d(0, 0, 0);
+                // // glVertex3d(L.x * 20, L.y * 20, L.z * 20);
+                glEnd();
+                printf("(%f,%f,%f)\n", dir_mundo.x, dir_mundo.y, dir_mundo.z);
+            }
         }
 
         // Profundizar en la jerarquia
@@ -1878,6 +1913,7 @@ static void teklatua(unsigned char key, int x, int y)
     int retval;
     int i;
     FILE *obj_file;
+    punto pAt;
 
     switch (key)
     {
@@ -1943,7 +1979,10 @@ static void teklatua(unsigned char key, int x, int y)
                 printf("Cambiado a modo vuelo\n");
             else
             {
-                look_at(camara_ptr, obj_ptr);
+                pAt.x = obj_ptr->mptr->m[3];
+                pAt.y = obj_ptr->mptr->m[7];
+                pAt.z = obj_ptr->mptr->m[11];
+                look_at(camara_ptr, pAt);
                 ajustar_distancia_analisis();
                 printf("Cambiado a modo analisis\n");
             }
@@ -2303,7 +2342,7 @@ int main(int argc, char **argv)
     (*sel_ptr)->mat = &(materiales[MATERIAL_BRONZE]);
     rotacion(&matriz_transformacion, EJE_Z, DIR_ADELANTE, 3.14159265358979323846);
     aplicar_transformacion((*sel_ptr), &matriz_transformacion, SISTEMA_LOCAL);
-    crear_luz((*sel_ptr), LUZ_FOCO, color_foco, 0, 0, 0, 0, 0, 0, cos(APERTURA_FOCO)); // El foco es especial, la pos se ajusta dinamicamente, depende el obj seleccionado
+    crear_luz((*sel_ptr), LUZ_FOCO, color_foco, 0, 0, 0, 0, -1, 0, cos(APERTURA_FOCO)); // El foco es especial, la pos se ajusta dinamicamente, depende el obj seleccionado
     focoobj_ptr = (*sel_ptr);
 
     // Cargar Foco camara ( luz foco )
