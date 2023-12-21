@@ -119,8 +119,6 @@ char fitxiz[100];
 
 int ultimo_es_visible;
 
-// TODO
-// funtzio honek u eta v koordenatuei dagokien pointerra itzuli behar du.
 // debe devolver el pointer correspondiente a las coordenadas u y v
 unsigned char *color_textura(float u, float v)
 {
@@ -178,7 +176,7 @@ void dibujar_linea(vertex p1, vertex p2, color3 color)
         pcalculado.intesidad.g = j * pcortemayor->intesidad.g + (1 - j) * pcortemenor->intesidad.g;
         pcalculado.intesidad.b = j * pcortemayor->intesidad.b + (1 - j) * pcortemenor->intesidad.b;
 
-        // TODO: Por ahora me vale para mejorar un poco el rendimiento
+        // para mejorar un poco el rendimiento
         if (abs(pcalculado.coord.x) > 500 || abs(pcalculado.coord.y) > 500)
             continue;
 
@@ -188,11 +186,6 @@ void dibujar_linea(vertex p1, vertex p2, color3 color)
             r = pcalculado.intesidad.r + 0.001; //* color.r;
             g = pcalculado.intesidad.g + 0.001; //* color.g;
             b = pcalculado.intesidad.b + 0.001; //* color.b;
-            // r = 255;
-            // g = 46;
-            // b = 143;
-            // printf("intensidad (%f,%f,%f) color (%f,%f,%f)\n", pcalculado.intesidad.r, pcalculado.intesidad.g, pcalculado.intesidad.b, color.r, color.g, color.b);
-            // printf("rgb (%f,%f,%f)\n", r, g, b);
         }
         else
         {
@@ -234,6 +227,12 @@ void print_estado()
     print_matrizea2("Posición foco objeto:", focoobj_ptr->mptr);
     print_matrizea2("Posición foco cámara:", fococam_ptr->mptr);
     printf("\n");
+
+    printf("Sistema de referencia (g): ");
+    if (ald_lokala == SISTEMA_LOCAL)
+        printf("SISTEMA LOCAL\n");
+    else
+        printf("SISTEMA DEL MUNDO\n");
 
     printf("Modo cámara (g): ");
     if (modo_camara == CAMARA_MOD_VUELO)
@@ -477,15 +476,9 @@ int aplicar_mperspectiva(vertex *pptr, double m[16])
 
     if (abs(w) < 1)
     {
-        // printf("INTERSECCION CON PLANO NEAR\n");
         return -1; // Interseccion con plano near
     }
 
-    // printf("x=%f z=%f w=%f ptemp (%.3f,%.3f,%.3f)\n", pptr->x, pptr->z, w, ptemp.x / w, ptemp.y / w, -ptemp.z / w);
-
-    // printf(" 1 ptemp.x %f\n", ptemp.x);
-    // printf(" 1 pptr->x %f\n", pptr->x);
-    // printf(" 1 w %f\n", w);
     pptr->coord.x = (ptemp.coord.x / w);
     pptr->coord.y = (ptemp.coord.y / w);
     pptr->coord.z = -(ptemp.coord.z / abs(w));
@@ -509,7 +502,6 @@ int aplicar_mperspectiva(vertex *pptr, double m[16])
 
     return 0;
 
-    // printf(" 2 pptr->x %f\n", pptr->z);
 }
 
 void normalizar_vec(vector3 *vptr)
@@ -620,8 +612,6 @@ void calcular_intesidad(object3d *objptr)
         N_local.z = vptr->N[2];              // SR Local ( objeto )
         mxvec(&N, objptr->mptr->m, N_local); // SR Mundo
         mxvec(&N_cam, mcsr_observador.m, N); // SR Camara
-                                             // printf("N_local (%f,%f,%f)\n",N_local.x,N_local.y,N_local.z);
-                                             // printf("N_cam (%f,%f,%f)\n",N_cam.x,N_cam.y,N_cam.z);
         normalizar_vec(&N_cam);
 
         if (isnan(N_cam.x))
@@ -662,9 +652,6 @@ void calcular_intesidad(object3d *objptr)
 
                 NL = N_cam.x * L.x + N_cam.y * L.y + N_cam.z * L.z; // N * L
 
-                // printf("luz (%f,%f,%f)  objeto (%f,%f,%f) L(%f,%f,%f) NL=%f\n", pluz_cam.x, pluz_cam.y, pluz_cam.z, pvert_cam.x, pvert_cam.y, pvert_cam.z, L[0],L[1],L[2], NL);
-                // printf("N_cam (%f,%f,%f) pluz_cam (%f,%f,%f)  pvert_cam (%f,%f,%f)\n",N_cam.x,N_cam.y,N_cam.z,pluz_cam.x,pluz_cam.y,pluz_cam.z,pvert_cam.x,pvert_cam.y,pvert_cam.z);
-
                 if (NL < 0)
                     NL = 0; // max ( 0, N*L )
 
@@ -678,17 +665,6 @@ void calcular_intesidad(object3d *objptr)
                     mxvec(&dir_cam, mcsr_observador.m, dir); // SR Camara
 
                     normalizar_vec(&dir_cam);
-
-                    // printf("dir_cam (%f,%f,%f)\n", dir_cam.x, dir_cam.y, dir_cam.z);
-
-                    // glBegin(GL_LINES);
-                    // glColor3ub(134, 134, 134);
-                    // glVertex3d(0, 0, 0);
-                    // glVertex3d(dir_cam.x * 20, dir_cam.y * 20, dir_cam.z * 20);
-                    // // glColor3ub(255, 255, 134);
-                    // // glVertex3d(0, 0, 0);
-                    // // glVertex3d(L.x * 20, L.y * 20, L.z * 20);
-                    // glEnd();
 
                     FL = -dir_cam.x * L.x + -dir_cam.y * L.y + -dir_cam.z * L.z; // F = dir_cam
 
@@ -713,8 +689,6 @@ void calcular_intesidad(object3d *objptr)
 
                 if (NL < 0)
                     NL = 0; // max ( 0, N*L )
-                // printf("dir_cam (%f,%f,%f)\n", dir_cam.x, dir_cam.y, dir_cam.z);
-                // printf("N_cam (%f,%f,%f)\n", N_cam.x, N_cam.y, N_cam.z);
             }
 
             // Calcular factor de atenuación de la luz
@@ -722,9 +696,7 @@ void calcular_intesidad(object3d *objptr)
             f_att = 1.0 / (CONSTANT_ATTENUATION + LINEAR_ATTENUATION * distancia_luz + QUADRATIC_ATTENUATION * pow(distancia_luz, 2));
             if (luzptr->lightptr->type == LUZ_DIRECCIONAL || f_att > 1)
                 f_att = 1;
-            // f_att = 1;
 
-            // printf("NL = %f\n", NL);
             sum_luces_r += f_att * NL * luzptr->lightptr->I.r * objptr->mat->Kd.r; // N*Li*Ii*Kd
             sum_luces_g += f_att * NL * luzptr->lightptr->I.g * objptr->mat->Kd.g; // N*Li*Ii*Kd
             sum_luces_g += f_att * NL * luzptr->lightptr->I.b * objptr->mat->Kd.b; // N*Li*Ii*Kd
@@ -756,7 +728,6 @@ void calcular_intesidad(object3d *objptr)
             normalizar_vec(&H);
 
             NH = N_cam.x * H.x + N_cam.y * H.y + -(N_cam.z * H.z); // N * H
-            // printf("N_cam (%f,%f,%f) pluz_cam (%f,%f,%f)  pvert_cam (%f,%f,%f)\n",N_cam.x,N_cam.y,N_cam.z,pluz_cam.x,pluz_cam.y,pluz_cam.z,pvert_cam.x,pvert_cam.y,pvert_cam.z);
 
             if (NH < 0)
                 NH = 0; // max ( 0, N*L )
@@ -771,27 +742,16 @@ void calcular_intesidad(object3d *objptr)
             sum_espec_b += f_att * NH * luzptr->lightptr->I.b * objptr->mat->Ks.b; // ((N*H)^ns * Ii * Ks)
         }
 
-        /*
-        sum_luces_r = 0;
-        sum_luces_g = 0;
-        sum_luces_b = 0;
-        sum_espec_r = 0;
-        sum_espec_g = 0;
-        sum_espec_b = 0;
-        */
-
+        
         vptr->intesidad.r = intensidad_ambiental_r + sum_luces_r + sum_espec_r;
 
         vptr->intesidad.g = intensidad_ambiental_g + sum_luces_g + sum_espec_g;
 
         vptr->intesidad.b = intensidad_ambiental_b + sum_luces_b + sum_espec_b;
 
-        // printf("%f %f %f\n",vptr->intesidad.r,vptr->intesidad.g,vptr->intesidad.b);
     }
 }
 
-// TODO: si miras a un objeto en tu misma pos va a dar error, siendo los resultados nan
-// Arreglo temporal: Poner la identidad en los vectores
 void look_at(object3d *observadorptr, punto objetivo)
 {
     int i;
@@ -1077,8 +1037,6 @@ void dibujar_triangulo(object3d *optr, int i)
         glVertex3d(p2.coord.x, p2.coord.y, p2.coord.z);
         glVertex3d(p3.coord.x, p3.coord.y, p3.coord.z);
 
-        // printf("p1 (%f,%f,%f) p2 (%f,%f,%f) p3 (%f,%f,%f)\n",p1.x,p1.y,p1.z,p2.x,p2.y,p2.z,p3.x,p3.y,p3.z);
-
         glEnd();
 
         if (dibujar_normales == 1)
@@ -1113,15 +1071,11 @@ void dibujar_triangulo(object3d *optr, int i)
             // NORMALES DE LOS VERTICES
             for (i = 0; i < fptr->num_vertices; i++)
             {
-                // printf("optr->vertex_table[fptr->vertex_ind_table[i]].coord.x=%f\n",optr->vertex_table[fptr->vertex_ind_table[i]].coord.x);
-                // printf("optr->vertex_table[fptr->vertex_ind_table[i]].N[0]=%f\n",optr->vertex_table[fptr->vertex_ind_table[i]].N[0]);
                 p2_vnormal.coord.x = optr->vertex_table[fptr->vertex_ind_table[i]].coord.x + optr->vertex_table[fptr->vertex_ind_table[i]].N[0] * 5;
                 p2_vnormal.coord.y = optr->vertex_table[fptr->vertex_ind_table[i]].coord.y + optr->vertex_table[fptr->vertex_ind_table[i]].N[1] * 5;
                 p2_vnormal.coord.z = optr->vertex_table[fptr->vertex_ind_table[i]].coord.z + optr->vertex_table[fptr->vertex_ind_table[i]].N[2] * 5;
                 p2_vnormal.u = 0;
                 p2_vnormal.v = 0;
-
-                // printf("p2_vnormal (%f,%f,%f)\n",p2_vnormal.x,p2_vnormal.y,p2_vnormal.z);
 
                 mxv(&p2_vnormal_transformado, mmodelview_ptr->m, p2_vnormal);
 
@@ -1759,11 +1713,6 @@ void aplicar_transformacion(object3d *objptr, mlist *matriz_transformacionptr, i
     nueva_matrizptr->hptr = objptr->mptr;
     objptr->mptr = nueva_matrizptr;
 
-    // if(objptr->child != 0)
-    // {
-    //     aplicar_transformacion(objptr->child, matriz_transformacionptr, sistema_referencia);
-    // }
-
     actualizar_hijo(objptr);
 }
 
@@ -1784,8 +1733,6 @@ void ajustar_distancia_analisis()
         translacion(&matriz_transformacion, EJE_Z, DIR_ADELANTE, (DISTANCIA_MINIMA_ANALISIS - distancia));
         aplicar_transformacion((*sel_ptr), &matriz_transformacion, SISTEMA_LOCAL);
     }
-
-    // printf("DISTANCIA:%f\n", distancia);
 }
 
 void tratar_transformacion_modo_analisis(int eje, int dir)
