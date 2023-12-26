@@ -21,6 +21,7 @@
 #define ANGULO_ROTACION 3.14159265358979323846 / 32
 #define PROPORCION_ESCALADO 1.2
 #define DISTANCIA_MINIMA_ANALISIS 30
+#define CAMBIO_APERTURA_FOCO 5 * (3.14159265 / 180)
 
 #define CAMARA_CONFIG_NEAR 5.0
 #define CAMARA_CONFIG_FAR 1000.0
@@ -118,6 +119,7 @@ int dibujar_no_visible;
 char fitxiz[100];
 
 int ultimo_es_visible;
+int flat;
 
 // debe devolver el pointer correspondiente a las coordenadas u y v
 unsigned char *color_textura(float u, float v)
@@ -295,6 +297,12 @@ void print_estado()
     {
         printf("Color foco camara (9) : rgb (%.0f,%.0f,%.0f)\n", fococam_ptr->lightptr->I.r, fococam_ptr->lightptr->I.g, fococam_ptr->lightptr->I.b);
     }
+
+    printf("Modo intensidad: ");
+    if (flat == 1)
+        printf("FLAT\n");
+    else
+        printf("GOURAUD\n");
 
     printf("------------(FIN ESTADO)------------\n");
 }
@@ -501,7 +509,6 @@ int aplicar_mperspectiva(vertex *pptr, double m[16])
     pptr->coord.z *= 500;
 
     return 0;
-
 }
 
 void normalizar_vec(vector3 *vptr)
@@ -514,6 +521,242 @@ void normalizar_vec(vector3 *vptr)
     vptr->x = vptr->x / mod;
     vptr->y = vptr->y / mod;
     vptr->z = vptr->z / mod;
+}
+
+void calcular_intesidad_vertice_flat(object3d *objptr, face *fptr, vertex *vptr)
+{
+
+    int i;
+
+    object3d *luzptr;
+    object3d *observadorptr;
+
+    punto pluz;
+    punto pluz_cam;
+
+    punto pvert_local;
+    punto pvert;
+    punto pvert_cam;
+
+    mlist mcsr_observador;
+
+    vector3 N_local;
+    vector3 N;
+    vector3 N_cam;
+
+    vector3 dir_local;
+    vector3 dir;
+    vector3 dir_cam;
+
+    double I_a = 0; // Intesidad ambiental
+    double K_a = 0; // Coeficiente ambiental
+    vector3 L;      // Vector a la luz
+    double I_i = 0; // Intensidad luz
+    double K_d = 0; // Coeficiente material
+    vector3 H;      // Vector especular ( aproximacion )
+    double K_s = 0; // Coeficiente especular
+    double ns = 0;  // Factor especular
+
+    double NL; // N * L
+    double NH; // N * H
+    double FL; // dir * L
+
+    vector3 V;  // V es el vector del vertice a la camara
+    vector3 VL; // V + L
+    double mod_vl;
+
+    double distancia_luz;
+    double f_att;
+
+    double sum_luces_r = 0;
+    double sum_luces_g = 0;
+    double sum_luces_b = 0;
+
+    double sum_espec_r = 0;
+    double sum_espec_g = 0;
+    double sum_espec_b = 0;
+
+    double intensidad_ambiental_r = luz_ambiental.I.r * objptr->mat->Ka.r; // I_a * K_a
+    double intensidad_ambiental_g = luz_ambiental.I.g * objptr->mat->Ka.g; // I_a * K_a
+    double intensidad_ambiental_b = luz_ambiental.I.b * objptr->mat->Ka.b; // I_a * K_a
+
+    if (camara_activa == 1)
+        observadorptr = camara_ptr;
+    else
+        observadorptr = obj_ptr;
+
+    calcular_mcsr(&mcsr_observador, observadorptr->mptr->m);
+    sum_luces_r = 0;
+    sum_luces_g = 0;
+    sum_luces_b = 0;
+
+    sum_espec_r = 0;
+    sum_espec_g = 0;
+    sum_espec_b = 0;
+
+    // Si una luz esta encendida se va a iluminar con el color que emite
+    if (objptr->lightptr != 0 && objptr->lightptr->onoff != 0)
+    {
+        if ((*sel_ptr) != objptr)
+        {
+            vptr->intesidad.r = objptr->lightptr->I.r;
+
+            vptr->intesidad.g = objptr->lightptr->I.g;
+
+            vptr->intesidad.b = objptr->lightptr->I.b;
+        }
+        else
+        {
+            vptr->intesidad.r = 0;
+
+            vptr->intesidad.g = 255;
+
+            vptr->intesidad.b = 0;
+        }
+        return;
+    }
+
+    // Calcular vector normal de la cara en el SR de la camara ( Solo afectan las rotaciones )
+    N_local.x = fptr->N[0];
+    N_local.y = fptr->N[1];
+    N_local.z = fptr->N[2];              // SR Local ( objeto )
+    mxvec(&N, objptr->mptr->m, N_local); // SR Mundo
+    mxvec(&N_cam, mcsr_observador.m, N); // SR Camara
+    normalizar_vec(&N_cam);
+
+    if (isnan(N_cam.x))
+        return;
+
+    // Calcular posicion del vertice en el SR de la camara
+    pvert_local.x = vptr->coord.x;
+    pvert_local.y = vptr->coord.y;
+    pvert_local.z = vptr->coord.z;             // SR Local ( objeto )
+    mxp(&pvert, objptr->mptr->m, pvert_local); // SR Mundo
+    mxp(&pvert_cam, mcsr_observador.m, pvert); // SR Camara
+
+    // Recorrer todas las luces   ---    E (N*Li*Ii*Kd)  +  E ((N*H)^ns * Ii * Ks)
+    for (luzptr = lucesptr; luzptr != 0; luzptr = luzptr->hptr)
+    {
+        if (luzptr->lightptr->onoff == 0)
+            continue;
+
+        if (objptr->lightptr == luzptr->lightptr)
+            continue;
+
+        if (luzptr->lightptr->type == LUZ_POSICIONAL || luzptr->lightptr->type == LUZ_FOCO)
+        {
+
+            // Calcular posicion de la luz en el SR de la camara ( le sumamos la pos de la luz dentro del obj, offset )
+            pluz.x = luzptr->mptr->m[3];
+            pluz.y = luzptr->mptr->m[7];
+            pluz.z = luzptr->mptr->m[11]; // SR Mundo
+
+            mxp(&pluz_cam, mcsr_observador.m, pluz); // SR Camara
+
+            // Calcular vector hacia la luz ( luz - vertice )  ---  L esta en el SR de la Camara
+            L.x = pluz_cam.x - pvert_cam.x;
+            L.y = pluz_cam.y - pvert_cam.y;
+            L.z = pluz_cam.z - pvert_cam.z; // SR Camara
+
+            normalizar_vec(&L);
+
+            NL = N_cam.x * L.x + N_cam.y * L.y + N_cam.z * L.z; // N * L
+
+            if (NL < 0)
+                NL = 0; // max ( 0, N*L )
+
+            if (luzptr->lightptr->type == LUZ_FOCO && NL > 0)
+            {
+                // Calcular direccion en el sistema de referencia de la camara ( Vector Z de la luz )
+
+                dir.x = -luzptr->mptr->m[2];
+                dir.y = -luzptr->mptr->m[6];
+                dir.z = -luzptr->mptr->m[10];            // SR Mundo
+                mxvec(&dir_cam, mcsr_observador.m, dir); // SR Camara
+
+                normalizar_vec(&dir_cam);
+
+                FL = -dir_cam.x * L.x + -dir_cam.y * L.y + -dir_cam.z * L.z; // F = dir_cam
+
+                if (FL < luzptr->lightptr->aperture) // Si se cumple, no se ilumina
+                    NL = 0;
+            }
+        }
+        else
+        { // LUZ_DIRECCIONAL
+
+            // Calcular direccion de la luz en el sistema de referencia de la camara
+            dir_local.x = luzptr->lightptr->dir[0];
+            dir_local.y = luzptr->lightptr->dir[1];
+            dir_local.z = luzptr->lightptr->dir[2]; // SR Local ( Luz )
+
+            mxvec(&dir, luzptr->mptr->m, dir_local); // SR Mundo
+            mxvec(&dir_cam, mcsr_observador.m, dir); // SR Camara
+
+            normalizar_vec(&dir_cam);
+
+            NL = N_cam.x * dir_cam.x + N_cam.y * dir_cam.y + N_cam.z * dir_cam.z; // N * L
+
+            if (NL < 0)
+                NL = 0; // max ( 0, N*L )
+        }
+
+        // Calcular factor de atenuación de la luz
+        distancia_luz = sqrt(pow(pluz_cam.x - pvert_cam.x, 2) + pow(pluz_cam.y - pvert_cam.y, 2) + pow(pluz_cam.z - pvert_cam.z, 2));
+        f_att = 1.0 / (CONSTANT_ATTENUATION + LINEAR_ATTENUATION * distancia_luz + QUADRATIC_ATTENUATION * pow(distancia_luz, 2));
+        if (luzptr->lightptr->type == LUZ_DIRECCIONAL || f_att > 1)
+            f_att = 1;
+
+        sum_luces_r += f_att * NL * luzptr->lightptr->I.r * objptr->mat->Kd.r; // N*Li*Ii*Kd
+        sum_luces_g += f_att * NL * luzptr->lightptr->I.g * objptr->mat->Kd.g; // N*Li*Ii*Kd
+        sum_luces_g += f_att * NL * luzptr->lightptr->I.b * objptr->mat->Kd.b; // N*Li*Ii*Kd
+
+        // Calcular vector especular, reflejo de L ---  H esta en el SR de la Camara
+
+        //                V es el vector del vertice a la camara ( camara - vertice )
+        V.x = 0 - pvert_cam.x; // La pos de la camara en su S.R es (0,0,0)
+        V.y = 0 - pvert_cam.y;
+        V.z = 0 - pvert_cam.z;
+
+        VL.x = V.x + L.x;
+        VL.y = V.y + L.y;
+        VL.z = V.z + L.z;
+
+        // mod_vl = sqrt(pow(VL[0], 2) + pow(VL[1], 2) + pow(VL[2], 2));
+        // if (mod_vl == 0)
+        // {
+        //     printf("mod_vl == 0\n");
+        //     mod_vl = 1;
+        // }
+
+        normalizar_vec(&VL);
+
+        H.x = VL.x;
+        H.y = VL.y;
+        H.z = VL.z;
+
+        normalizar_vec(&H);
+
+        NH = N_cam.x * H.x + N_cam.y * H.y + -(N_cam.z * H.z); // N * H
+
+        if (NH < 0)
+            NH = 0; // max ( 0, N*L )
+        else
+        {
+            // Aplicar shine
+            NH = pow(NH, luzptr->mat->shine);
+        }
+
+        sum_espec_r += f_att * NH * luzptr->lightptr->I.r * objptr->mat->Ks.r; // ((N*H)^ns * Ii * Ks)
+        sum_espec_g += f_att * NH * luzptr->lightptr->I.g * objptr->mat->Ks.g; // ((N*H)^ns * Ii * Ks)
+        sum_espec_b += f_att * NH * luzptr->lightptr->I.b * objptr->mat->Ks.b; // ((N*H)^ns * Ii * Ks)
+    }
+
+    vptr->intesidad.r = intensidad_ambiental_r + sum_luces_r + sum_espec_r;
+
+    vptr->intesidad.g = intensidad_ambiental_g + sum_luces_g + sum_espec_g;
+
+    vptr->intesidad.b = intensidad_ambiental_b + sum_luces_b + sum_espec_b;
 }
 
 // Calcula la intensidad para cada vertice del objeto
@@ -582,6 +825,7 @@ void calcular_intesidad(object3d *objptr)
     calcular_mcsr(&mcsr_observador, observadorptr->mptr->m);
 
     // I = Ia * Ka + E (N*Li*Ii*Kd) + E ((N*H)^ns * Ii * Ks)
+
     for (i = 0; i < objptr->num_vertices; i++)
     {
         sum_luces_r = 0;
@@ -597,12 +841,22 @@ void calcular_intesidad(object3d *objptr)
         // Si una luz esta encendida se va a iluminar con el color que emite
         if (objptr->lightptr != 0 && objptr->lightptr->onoff != 0)
         {
-            vptr->intesidad.r = objptr->lightptr->I.r;
+            if ((*sel_ptr) != objptr)
+            {
+                vptr->intesidad.r = objptr->lightptr->I.r;
 
-            vptr->intesidad.g = objptr->lightptr->I.g;
+                vptr->intesidad.g = objptr->lightptr->I.g;
 
-            vptr->intesidad.b = objptr->lightptr->I.b;
+                vptr->intesidad.b = objptr->lightptr->I.b;
+            }
+            else
+            {
+                vptr->intesidad.r = 0;
 
+                vptr->intesidad.g = 255;
+
+                vptr->intesidad.b = 0;
+            }
             continue;
         }
 
@@ -742,13 +996,11 @@ void calcular_intesidad(object3d *objptr)
             sum_espec_b += f_att * NH * luzptr->lightptr->I.b * objptr->mat->Ks.b; // ((N*H)^ns * Ii * Ks)
         }
 
-        
         vptr->intesidad.r = intensidad_ambiental_r + sum_luces_r + sum_espec_r;
 
         vptr->intesidad.g = intensidad_ambiental_g + sum_luces_g + sum_espec_g;
 
         vptr->intesidad.b = intensidad_ambiental_b + sum_luces_b + sum_espec_b;
-
     }
 }
 
@@ -1022,6 +1274,13 @@ void dibujar_triangulo(object3d *optr, int i)
             return;
         if (aplicar_mperspectiva(&p3, mperspectiva_ptr->m) != 0)
             return;
+    }
+
+    if (flat == 1)
+    {
+        calcular_intesidad_vertice_flat(optr,fptr, &p1);
+        calcular_intesidad_vertice_flat(optr,fptr, &p2);
+        calcular_intesidad_vertice_flat(optr,fptr, &p3);
     }
 
     if (lineak == 1)
@@ -1780,6 +2039,7 @@ void tratar_transformacion_modo_analisis(int eje, int dir)
 void tratar_transformacion(int eje, int dir)
 {
     mlist matriz_transformacion;
+    light *luz;
 
     // Si estamos con camara_activa y en modo analisis,
     // vamos a separar la logica para las transformaciones en este caso
@@ -1788,6 +2048,26 @@ void tratar_transformacion(int eje, int dir)
     {
         tratar_transformacion_modo_analisis(eje, dir);
         return;
+    }
+
+    if ((*sel_ptr)->lightptr != 0) // Es una luz, mirar sus transformaciones posibles
+    {
+        luz = (*sel_ptr)->lightptr;
+
+        switch (luz->type)
+        {
+        case LUZ_DIRECCIONAL: // SOL
+            if (aldaketa != ROTACION)
+                return;
+            break;
+        case LUZ_FOCO:
+            return; // El foco se mueve con el objeto
+            break;
+        case LUZ_POSICIONAL: // BOMBILLA
+            if (aldaketa != TRANSLACION)
+                return;
+            break;
+        }
     }
 
     switch (aldaketa)
@@ -1980,9 +2260,9 @@ static void teklatua(unsigned char key, int x, int y)
             }
         }
         else if (lista_activa == LISTA_OBJETOS && camara_activa == 1)
+            cambiar_lista_activa(LISTA_LUCES);
+        else if (camara_activa == 1)
             cambiar_lista_activa(LISTA_CAMARAS);
-        // else if (camara_activa == 1)
-        //     cambiar_lista_activa(LISTA_LUCES);
         break;
     case 'C':
         if (camara_activa == 0)
@@ -2094,6 +2374,24 @@ static void teklatua(unsigned char key, int x, int y)
         break;
     case '9':
         cambiar_luz_foco_camara();
+        break;
+    case 'F':
+        if (flat == 0)
+            flat = 1;
+        else
+            flat = 0;
+        break;
+    case '-':
+        if ((*sel_ptr)->lightptr != 0 && (*sel_ptr)->lightptr->type == LUZ_FOCO)
+        {
+            (*sel_ptr)->lightptr->aperture += CAMBIO_APERTURA_FOCO;
+        }
+        break;
+    case '+':
+        if ((*sel_ptr)->lightptr != 0 && (*sel_ptr)->lightptr->type == LUZ_FOCO)
+        {
+            (*sel_ptr)->lightptr->aperture -= CAMBIO_APERTURA_FOCO;
+        }
         break;
     case 9: /* <TAB> */
         siguiente_elemento_lista();
@@ -2249,6 +2547,7 @@ int main(int argc, char **argv)
     ultimo_es_visible = 0;
     dibujar_no_visible = 0;
     dibujar_normales = 1;
+    flat = 0;
 
     inicializar_materiales();
 
