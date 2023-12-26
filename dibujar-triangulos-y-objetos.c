@@ -628,11 +628,15 @@ void calcular_intesidad_vertice_flat(object3d *objptr, face *fptr, vertex *vptr)
         return;
 
     // Calcular posicion del vertice en el SR de la camara
-    pvert_local.x = vptr->coord.x;
-    pvert_local.y = vptr->coord.y;
-    pvert_local.z = vptr->coord.z;             // SR Local ( objeto )
-    mxp(&pvert, objptr->mptr->m, pvert_local); // SR Mundo
-    mxp(&pvert_cam, mcsr_observador.m, pvert); // SR Camara
+    /*    pvert_local.x = vptr->coord.x;
+        pvert_local.y = vptr->coord.y;
+        pvert_local.z = vptr->coord.z;             // SR Local ( objeto )
+        mxp(&pvert, objptr->mptr->m, pvert_local); // SR Mundo
+        mxp(&pvert_cam, mcsr_observador.m, pvert); // SR Camara
+    */
+    pvert_cam.x = vptr->coord.x;
+    pvert_cam.y = vptr->coord.y;
+    pvert_cam.z = vptr->coord.z;
 
     // Recorrer todas las luces   ---    E (N*Li*Ii*Kd)  +  E ((N*H)^ns * Ii * Ks)
     for (luzptr = lucesptr; luzptr != 0; luzptr = luzptr->hptr)
@@ -702,7 +706,10 @@ void calcular_intesidad_vertice_flat(object3d *objptr, face *fptr, vertex *vptr)
         }
 
         // Calcular factor de atenuación de la luz
-        distancia_luz = sqrt(pow(pluz_cam.x - pvert_cam.x, 2) + pow(pluz_cam.y - pvert_cam.y, 2) + pow(pluz_cam.z - pvert_cam.z, 2));
+        if (luzptr->lightptr->type == LUZ_POSICIONAL || luzptr->lightptr->type == LUZ_FOCO)
+            distancia_luz = sqrt(pow(pluz_cam.x - pvert_cam.x, 2) + pow(pluz_cam.y - pvert_cam.y, 2) + pow(pluz_cam.z - pvert_cam.z, 2));
+        else
+            distancia_luz = 0;
         f_att = 1.0 / (CONSTANT_ATTENUATION + LINEAR_ATTENUATION * distancia_luz + QUADRATIC_ATTENUATION * pow(distancia_luz, 2));
         if (luzptr->lightptr->type == LUZ_DIRECCIONAL || f_att > 1)
             f_att = 1;
@@ -946,7 +953,10 @@ void calcular_intesidad(object3d *objptr)
             }
 
             // Calcular factor de atenuación de la luz
-            distancia_luz = sqrt(pow(pluz_cam.x - pvert_cam.x, 2) + pow(pluz_cam.y - pvert_cam.y, 2) + pow(pluz_cam.z - pvert_cam.z, 2));
+            if (luzptr->lightptr->type == LUZ_POSICIONAL || luzptr->lightptr->type == LUZ_FOCO)
+                distancia_luz = sqrt(pow(pluz_cam.x - pvert_cam.x, 2) + pow(pluz_cam.y - pvert_cam.y, 2) + pow(pluz_cam.z - pvert_cam.z, 2));
+            else
+                distancia_luz = 0;
             f_att = 1.0 / (CONSTANT_ATTENUATION + LINEAR_ATTENUATION * distancia_luz + QUADRATIC_ATTENUATION * pow(distancia_luz, 2));
             if (luzptr->lightptr->type == LUZ_DIRECCIONAL || f_att > 1)
                 f_att = 1;
@@ -1264,6 +1274,14 @@ void dibujar_triangulo(object3d *optr, int i)
     mxv(&p2, mmodelview_ptr->m, optr->vertex_table[fptr->vertex_ind_table[1]]);
     mxv(&p3, mmodelview_ptr->m, optr->vertex_table[fptr->vertex_ind_table[2]]);
 
+    // Corregir luz si esta en modo flat, para que calcule usando los normales de la cara
+    if (flat == 1)
+    {
+        calcular_intesidad_vertice_flat(optr, fptr, &p1);
+        calcular_intesidad_vertice_flat(optr, fptr, &p2);
+        calcular_intesidad_vertice_flat(optr, fptr, &p3);
+    }
+
     // Si la camara esta en perspectiva, aplicar (Mp * Mcsr * Mobj * Obj)
     if (tipo_camara == CAMARA_PERSPECTIVA)
     {
@@ -1274,13 +1292,6 @@ void dibujar_triangulo(object3d *optr, int i)
             return;
         if (aplicar_mperspectiva(&p3, mperspectiva_ptr->m) != 0)
             return;
-    }
-
-    if (flat == 1)
-    {
-        calcular_intesidad_vertice_flat(optr,fptr, &p1);
-        calcular_intesidad_vertice_flat(optr,fptr, &p2);
-        calcular_intesidad_vertice_flat(optr,fptr, &p3);
     }
 
     if (lineak == 1)
